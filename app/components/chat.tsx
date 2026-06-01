@@ -169,18 +169,21 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
     log("API", `POST /api/chat -> building agent prompt with ${products.length} products`);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 400,
           system: buildAgentSystem(products, lang),
           messages: [{ role: "user", content: q }],
         }),
       });
       const data = await res.json();
-      const raw = data?.content?.[0]?.text || "{}";
+
+      if (!res.ok) {
+        throw new Error(data?.error || "AI request failed");
+      }
+
+      const raw = data?.message || "{}";
 
       let parsed: AgentResponse;
       try {
@@ -236,7 +239,7 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <div style={{ width: 7, height: 7, borderRadius: "50%", background: speaking ? "#4ade80" : "#6366f1", boxShadow: speaking ? "0 0 8px #4ade80" : "none", transition: "all 0.3s" }} />
           <span style={{ color: "white", fontSize: 13, fontWeight: 600 }}>AI Agent</span>
-          <span style={{ color: "#334155", fontSize: 9, fontFamily: "monospace" }}>claude-sonnet</span>
+          <span style={{ color: "#334155", fontSize: 9, fontFamily: "monospace" }}>openrouter</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {["en", "hi"].map((item) => (
