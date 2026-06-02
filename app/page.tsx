@@ -1,5 +1,5 @@
-import InventoryApp from "./components/inventory-app";
+import Landing from "./components/landing";
 
 export default function Page() {
-  return <InventoryApp />;
+  return <Landing />;
 }

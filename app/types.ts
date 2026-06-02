@@ -27,5 +27,4 @@ export type LogFn = (
   err?: boolean,
 ) => void;
 
-export type PageView = "landing" | "login" | "signup" | "dashboard";
 export type AuthMode = "login" | "signup";

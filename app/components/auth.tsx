@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { db } from "../lib/supabase-db";
-import type { AuthMode, LogFn, PageView, User } from "../types";
+import { useLog } from "../lib/log-context";
+import type { AuthMode } from "../types";
 import Spin from "./spin";
 
 type AuthProps = {
   mode: AuthMode;
-  go: (page: PageView) => void;
-  onAuth: (user: User) => void;
-  log: LogFn;
 };
 
-export default function Auth({ mode, go, onAuth, log }: AuthProps) {
+export default function Auth({ mode }: AuthProps) {
+  const router = useRouter();
+  const { log } = useLog();
   const [email, setEmail] = useState(mode === "login" ? "kori@dev.com" : "");
   const [pass, setPass] = useState(mode === "login" ? "1234" : "");
   const [busy, setBusy] = useState(false);
@@ -32,7 +34,7 @@ export default function Auth({ mode, go, onAuth, log }: AuthProps) {
     } else {
       log("AUTH", "JWT issued, session stored", true);
       log("REACT", "router.push('/dashboard')", true);
-      onAuth(user);
+      router.push("/dashboard");
     }
 
     setBusy(false);
@@ -64,13 +66,13 @@ export default function Auth({ mode, go, onAuth, log }: AuthProps) {
         </div>
         <p className="text-muted text-xs text-center mt-6">
           {mode === "login" ? "No account? " : "Have one? "}
-          <span onClick={() => go(mode === "login" ? "signup" : "login")} className="text-accent hover:text-accent-hover cursor-pointer transition-colors">
+          <Link href={mode === "login" ? "/signup" : "/login"} className="text-accent hover:text-accent-hover cursor-pointer transition-colors">
             {mode === "login" ? "Sign up" : "Log in"}
-          </span>
+          </Link>
         </p>
-        <p onClick={() => go("landing")} className="text-muted text-[11px] text-center mt-3 cursor-pointer hover:text-subtle transition-colors">
+        <Link href="/" className="block text-center text-muted text-[11px] mt-3 hover:text-subtle transition-colors">
           &larr; back
-        </p>
+        </Link>
       </div>
     </div>
   );

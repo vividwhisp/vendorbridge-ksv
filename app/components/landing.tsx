@@ -1,13 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import type { PageView } from "../types";
 
-type LandingProps = {
-  go: (page: PageView) => void;
-};
-
-export default function Landing({ go }: LandingProps) {
+export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const features = [
@@ -37,27 +33,27 @@ export default function Landing({ go }: LandingProps) {
     <div className="min-h-screen flex flex-col">
       <nav className="fixed top-0 inset-x-0 z-30 bg-bg/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-          <span className="text-fg font-semibold tracking-tight">Inventory AI</span>
+          <Link href="/" className="text-fg font-semibold tracking-tight">Inventory AI</Link>
           <div className="hidden sm:flex items-center gap-6">
             <a href="#features" className="text-muted hover:text-fg text-sm transition-colors">Features</a>
             <a href="#about" className="text-muted hover:text-fg text-sm transition-colors">About</a>
             <a href="#contact" className="text-muted hover:text-fg text-sm transition-colors">Contact</a>
           </div>
           <div className="hidden sm:flex items-center gap-2.5">
-            <button onClick={() => go("login")} className="text-sm text-muted hover:text-fg border border-border rounded-lg px-3.5 py-1.5 transition-colors">Log In</button>
-            <button onClick={() => go("signup")} className="text-sm text-bg font-medium bg-accent hover:bg-accent-hover rounded-lg px-3.5 py-1.5 transition-colors">Sign Up</button>
+            <Link href="/login" className="text-sm text-muted hover:text-fg border border-border rounded-lg px-3.5 py-1.5 transition-colors">Log In</Link>
+            <Link href="/signup" className="text-sm text-bg font-medium bg-accent hover:bg-accent-hover rounded-lg px-3.5 py-1.5 transition-colors">Sign Up</Link>
           </div>
           <button onClick={() => setMenuOpen(!menuOpen)} className="sm:hidden text-fg text-xl">&#9776;</button>
         </div>
         {menuOpen && (
           <div className="sm:hidden border-t border-border bg-surface animate-fadeIn">
             <div className="flex flex-col px-4 py-3 gap-3">
-              <a href="#features" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm transition-colors">Features</a>
-              <a href="#about" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm transition-colors">About</a>
-              <a href="#contact" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm transition-colors">Contact</a>
+              <a href="#features" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm">Features</a>
+              <a href="#about" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm">About</a>
+              <a href="#contact" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm">Contact</a>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => go("login")} className="flex-1 text-sm text-muted hover:text-fg border border-border rounded-lg py-1.5 transition-colors">Log In</button>
-                <button onClick={() => go("signup")} className="flex-1 text-sm text-bg font-medium bg-accent hover:bg-accent-hover rounded-lg py-1.5 transition-colors">Sign Up</button>
+                <Link href="/login" onClick={() => setMenuOpen(false)} className="flex-1 text-center text-sm text-muted hover:text-fg border border-border rounded-lg py-1.5 transition-colors">Log In</Link>
+                <Link href="/signup" onClick={() => setMenuOpen(false)} className="flex-1 text-center text-sm text-bg font-medium bg-accent hover:bg-accent-hover rounded-lg py-1.5 transition-colors">Sign Up</Link>
               </div>
             </div>
           </div>
@@ -79,9 +75,9 @@ export default function Landing({ go }: LandingProps) {
           Full-stack demo with search, edit, and an AI agent that can take actions in your database.
         </p>
         <div className="animate-fadeInUp delay-3 flex flex-col sm:flex-row gap-3 w-full max-w-[280px]">
-          <button onClick={() => go("login")} className="w-full bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-5 py-3 rounded-lg transition-colors">
+          <Link href="/login" className="w-full bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-5 py-3 rounded-lg transition-colors text-center">
             Get Started
-          </button>
+          </Link>
           <a href="#features" className="w-full border border-border text-subtle hover:text-fg hover:border-muted text-sm font-medium px-5 py-3 rounded-lg transition-colors text-center">
             Learn More
           </a>
@@ -122,9 +118,7 @@ export default function Landing({ go }: LandingProps) {
         <div className="max-w-6xl mx-auto text-center animate-fadeInUp">
           <span className="text-accent text-xs font-mono tracking-widest uppercase">Contact</span>
           <h2 className="text-fg text-2xl sm:text-3xl font-light mt-3 mb-6">Get in touch</h2>
-          <p className="text-muted text-sm mb-8">
-            Have questions or feedback? Reach out to the team.
-          </p>
+          <p className="text-muted text-sm mb-8">Have questions or feedback? Reach out to the team.</p>
           <div className="flex justify-center gap-6 text-sm">
             <a href="mailto:hello@example.com" className="text-muted hover:text-accent transition-colors">Email</a>
             <a href="#" className="text-muted hover:text-accent transition-colors">Twitter</a>

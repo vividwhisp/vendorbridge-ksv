@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { db } from "../lib/supabase-db";
-import type { LogEntry, LogFn, Product, User } from "../types";
+import { useLog } from "../lib/log-context";
+import type { Product, User } from "../types";
 import Chat from "./chat";
 import EditModal from "./edit-modal";
 import LogPanel from "./log-panel";
@@ -10,10 +12,6 @@ import Spin from "./spin";
 
 type DashboardProps = {
   user: User;
-  onLogout: () => void;
-  log: LogFn;
-  logs: LogEntry[];
-  onClearLogs: () => void;
 };
 
 const emptyForm = { name: "", price: "", quantity: "", category: "" };
@@ -24,7 +22,9 @@ const navItems = [
   { id: "logs", label: "Logs" },
 ];
 
-export default function Dashboard({ user, onLogout, log, logs, onClearLogs }: DashboardProps) {
+export default function DashboardView({ user }: DashboardProps) {
+  const router = useRouter();
+  const { log, logs, clearLogs } = useLog();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -106,6 +106,13 @@ export default function Dashboard({ user, onLogout, log, logs, onClearLogs }: Da
     } finally { setSeeding(false); }
   }
 
+  async function logout() {
+    log("AUTH", "supabase.auth.signOut()");
+    await db.signOut();
+    log("AUTH", "Session cleared", true);
+    router.push("/");
+  }
+
   const totalVal = products.reduce((acc, p) => acc + p.price * p.quantity, 0);
   const lowCount = products.filter((p) => p.quantity < 10).length;
   const okCount = products.filter((p) => p.quantity >= 10).length;
@@ -153,7 +160,7 @@ export default function Dashboard({ user, onLogout, log, logs, onClearLogs }: Da
         </nav>
         <div className="px-4 py-3 border-t border-border">
           <div className="text-xs text-muted mb-2 truncate">{user.email}</div>
-          <button onClick={onLogout} className="w-full text-xs text-muted hover:text-danger border border-border hover:border-danger rounded-lg py-1.5 transition-colors">
+          <button onClick={logout} className="w-full text-xs text-muted hover:text-danger border border-border hover:border-danger rounded-lg py-1.5 transition-colors">
             Sign Out
           </button>
         </div>
@@ -290,7 +297,7 @@ export default function Dashboard({ user, onLogout, log, logs, onClearLogs }: Da
 
           {showLogs && (
             <div className="hidden lg:block w-[280px] border-l border-border animate-slideInRight">
-              <LogPanel logs={logs} onClear={onClearLogs} />
+              <LogPanel logs={logs} onClear={clearLogs} />
             </div>
           )}
         </div>
