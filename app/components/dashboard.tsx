@@ -2,20 +2,29 @@
 
 import { useEffect, useState } from "react";
 import { db } from "../lib/supabase-db";
-import type { LogFn, Product, User } from "../types";
+import type { LogEntry, LogFn, Product, User } from "../types";
 import Chat from "./chat";
 import EditModal from "./edit-modal";
+import LogPanel from "./log-panel";
 import Spin from "./spin";
 
 type DashboardProps = {
   user: User;
   onLogout: () => void;
   log: LogFn;
+  logs: LogEntry[];
+  onClearLogs: () => void;
 };
 
 const emptyForm = { name: "", price: "", quantity: "", category: "" };
 
-export default function Dashboard({ user, onLogout, log }: DashboardProps) {
+const navItems = [
+  { id: "overview", label: "Overview" },
+  { id: "products", label: "Products" },
+  { id: "logs", label: "Logs" },
+];
+
+export default function Dashboard({ user, onLogout, log, logs, onClearLogs }: DashboardProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,60 +32,40 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
   const [showForm, setShowForm] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [activeNav, setActiveNav] = useState("products");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     let cancelled = false;
-
     db.getAll()
       .then((data) => {
-        if (!cancelled) {
-          setProducts(data);
-          setLoading(false);
-          log("DB", `${data.length} products loaded from Supabase`, true);
-        }
+        if (!cancelled) { setProducts(data); setLoading(false); log("DB", `${data.length} products loaded from Supabase`, true); }
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : "Could not load products.";
-          log("DB", message, false, true);
-          setLoading(false);
-        }
+        if (!cancelled) { log("DB", error instanceof Error ? error.message : "Could not load products.", false, true); setLoading(false); }
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [log]);
 
   async function add() {
-    if (!form.name || !form.price || !form.quantity) {
-      return;
-    }
-
+    if (!form.name || !form.price || !form.quantity) return;
     setAdding(true);
     log("API", "POST /api/products");
     log("DB", `supabase.from('products').insert({name:'${form.name}'})`);
     try {
-      const row = await db.insert({
-        name: form.name,
-        price: Number(form.price),
-        quantity: Number(form.quantity),
-        category: form.category || "General",
-      });
+      const row = await db.insert({ name: form.name, price: Number(form.price), quantity: Number(form.quantity), category: form.category || "General" });
       log("DB", `Row inserted -> id:${row.id}`, true);
       setProducts((prev) => [...prev, row]);
       setForm(emptyForm);
       setShowForm(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not add product.";
-      log("DB", message, false, true);
-    } finally {
-      setAdding(false);
-    }
+      log("DB", error instanceof Error ? error.message : "Could not add product.", false, true);
+    } finally { setAdding(false); }
   }
 
   async function save(id: number, data: Partial<Omit<Product, "id">>) {
@@ -88,8 +77,7 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
       setProducts((prev) => prev.map((item) => item.id === id ? updated : item));
       setEditProduct(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not update product.";
-      log("DB", message, false, true);
+      log("DB", error instanceof Error ? error.message : "Could not update product.", false, true);
     }
   }
 
@@ -102,192 +90,216 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
       log("DB", "Deleted", true);
       setProducts((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not delete product.";
-      log("DB", message, false, true);
-    } finally {
-      setDeleting(null);
-    }
+      log("DB", error instanceof Error ? error.message : "Could not delete product.", false, true);
+    } finally { setDeleting(null); }
   }
 
   async function seedSamples() {
     setSeeding(true);
     log("DB", "Loading sample products for current Supabase user...");
-
     try {
       const rows = await db.seedStarterProducts();
       log("DB", `${rows.length} sample products inserted`, true);
       setProducts((prev) => [...prev, ...rows]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not load sample products.";
-      log("DB", message, false, true);
-    } finally {
-      setSeeding(false);
-    }
+      log("DB", error instanceof Error ? error.message : "Could not load sample products.", false, true);
+    } finally { setSeeding(false); }
   }
 
-  async function logout() {
-    log("AUTH", "supabase.auth.signOut()");
-    await db.signOut();
-    log("AUTH", "Session cleared", true);
-    onLogout();
-  }
-
-  const totalVal = products.reduce((acc, product) => acc + product.price * product.quantity, 0);
-  const lowStock = products.filter((product) => product.quantity < 10);
-  const inStock = products.filter((product) => product.quantity >= 10);
-  const filtered = products.filter((product) => {
-    const matchSearch = product.name.toLowerCase().includes(search.toLowerCase()) || product.category.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === "all" || (filter === "low" && product.quantity < 10) || (filter === "ok" && product.quantity >= 10);
-    return matchSearch && matchFilter;
+  const totalVal = products.reduce((acc, p) => acc + p.price * p.quantity, 0);
+  const lowCount = products.filter((p) => p.quantity < 10).length;
+  const okCount = products.filter((p) => p.quantity >= 10).length;
+  const filtered = products.filter((p) => {
+    const ms = p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
+    const mf = filter === "all" || (filter === "low" && p.quantity < 10) || (filter === "ok" && p.quantity >= 10);
+    return ms && mf;
   });
 
+  const stats = [
+    { label: "Total Products", value: products.length },
+    { label: "Total Value", value: `INR ${totalVal.toLocaleString()}`, accent: true },
+    { label: "Low Stock", value: lowCount, danger: lowCount > 0 },
+    { label: "In Stock", value: okCount },
+  ];
+
+  function handleNav(id: string) {
+    setActiveNav(id);
+    if (id === "logs") { setShowLogs((prev) => !prev); return; }
+    setShowLogs(false);
+    if (id === "overview") setActiveNav("products");
+  }
+
   return (
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", background: "#0f172a" }}>
-      <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", padding: "11px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
-        <div>
-          <span style={{ color: "white", fontWeight: 700, fontSize: 15 }}>Inventory</span>
-          <span style={{ color: "#1e293b", fontSize: 9, fontFamily: "monospace", marginLeft: 8 }}>app/dashboard/page.tsx</span>
+    <div className="min-h-screen flex">
+      <aside className={`fixed inset-y-0 left-0 z-30 w-56 bg-surface border-r border-border flex flex-col transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:relative`}>
+        <div className="flex items-center gap-2 h-14 px-5 border-b border-border">
+          <span className="text-accent text-lg">&#9632;</span>
+          <span className="text-fg font-semibold text-sm">Inventory</span>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ color: "#334155", fontSize: 11 }}>{user.email}</span>
-          <button onClick={logout} style={{ background: "none", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 5, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>Logout</button>
-        </div>
-      </div>
-
-      <div style={{ padding: "20px", flex: 1 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-          {[
-            { label: "Total Products", value: products.length, color: "#818cf8" },
-            { label: "Total Value", value: `INR ${totalVal.toLocaleString()}`, color: "#4ade80" },
-            { label: "Low Stock", value: lowStock.length, color: "#f87171" },
-            { label: "In Stock", value: inStock.length, color: "#fb923c" },
-          ].map((stat) => (
-            <div key={stat.label} style={{ background: "#1e293b", borderRadius: 10, padding: "14px 16px", border: "1px solid #334155" }}>
-              <p style={{ color: "#475569", fontSize: 10, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: 1 }}>{stat.label}</p>
-              <p style={{ color: stat.color, fontSize: 20, fontWeight: 700, margin: 0 }}>{stat.value}</p>
-            </div>
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNav(item.id)}
+              className={`text-left text-sm rounded-lg px-3 py-2 transition-colors ${
+                activeNav === item.id && item.id !== "logs"
+                  ? "bg-accent/10 text-accent font-medium"
+                  : "text-muted hover:text-fg hover:bg-border/50"
+              }`}
+            >
+              {item.label}
+            </button>
           ))}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#334155", fontSize: 14 }}>?</span>
-            <input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                log("UI", `Search: "${event.target.value}"`);
-              }}
-              placeholder="Search products or category..."
-              style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 10px 8px 32px", color: "white", fontSize: 12, boxSizing: "border-box", outline: "none" }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {[
-              ["all", "All"],
-              ["low", "Low"],
-              ["ok", "OK"],
-            ].map(([value, label]) => (
-              <button key={value} onClick={() => { setFilter(value); log("UI", `Filter: ${label}`); }} style={{ background: filter === value ? "#6366f1" : "transparent", color: filter === value ? "white" : "#475569", border: "1px solid #334155", borderRadius: 6, padding: "7px 12px", fontSize: 11, cursor: "pointer", fontWeight: filter === value ? 600 : 400 }}>{label}</button>
-            ))}
-          </div>
-          <button onClick={() => setShowForm((prev) => !prev)} style={{ background: showForm ? "transparent" : "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "white", border: showForm ? "1px solid #334155" : "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-            {showForm ? "Cancel" : "+ Add"}
+        </nav>
+        <div className="px-4 py-3 border-t border-border">
+          <div className="text-xs text-muted mb-2 truncate">{user.email}</div>
+          <button onClick={onLogout} className="w-full text-xs text-muted hover:text-danger border border-border hover:border-danger rounded-lg py-1.5 transition-colors">
+            Sign Out
           </button>
         </div>
+        <button onClick={() => setSidebarOpen(false)} className="lg:hidden absolute top-3 right-3 text-muted hover:text-fg">&times;</button>
+      </aside>
 
-        {showForm && (
-          <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: 14, marginBottom: 16 }}>
-            <p style={{ color: "#334155", fontSize: 9, fontFamily: "monospace", marginBottom: 10 }}>POST /api/products -&gt; supabase.from(&apos;products&apos;).insert(body)</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-              {[
-                ["Name", "name", "text"],
-                ["Price", "price", "number"],
-                ["Qty", "quantity", "number"],
-                ["Category", "category", "text"],
-              ].map(([label, key, type]) => (
-                <div key={key}>
-                  <label style={{ color: "#475569", fontSize: 9, display: "block", marginBottom: 4, textTransform: "uppercase" }}>{label}</label>
-                  <input type={type} value={form[key as keyof typeof form]} onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))} style={{ width: "100%", background: "#0f172a", border: "1px solid #334155", borderRadius: 6, padding: "7px 9px", color: "white", fontSize: 12, boxSizing: "border-box", outline: "none" }} />
-                </div>
-              ))}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-10 bg-bg/80 backdrop-blur-lg border-b border-border">
+          <div className="flex items-center justify-between px-4 sm:px-6 h-14">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted hover:text-fg text-lg">&#9776;</button>
+              <span className="text-fg font-medium text-sm hidden sm:inline">Products</span>
+              <span className="text-muted text-[10px] font-mono hidden sm:inline">{products.length} items</span>
             </div>
-            <button onClick={add} disabled={adding} style={{ background: "#15803d", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-              {adding ? (
-                <>
-                  <Spin s={11} />
-                  <span>Inserting...</span>
-                </>
-              ) : "Save to Database"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
+                className={`text-xs rounded-lg px-3 py-1.5 border transition-colors ${showLogs ? "bg-accent text-bg border-accent" : "text-muted border-border hover:text-fg hover:border-muted"}`}
+              >
+                Logs
+              </button>
+              <span className="text-muted text-xs hidden sm:inline">{user.email}</span>
+            </div>
           </div>
-        )}
+        </header>
 
-        {(search || filter !== "all") && (
-          <p style={{ color: "#334155", fontSize: 11, marginBottom: 12 }}>
-            Showing {filtered.length} of {products.length} products
-            {search && <span> matching &quot;<span style={{ color: "#818cf8" }}>{search}</span>&quot;</span>}
-            {filter !== "all" && <span> - filter: <span style={{ color: "#818cf8" }}>{filter === "low" ? "Low Stock" : "In Stock"}</span></span>}
-          </p>
-        )}
-
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 60, color: "#334155" }}>
-            <div style={{ width: 24, height: 24, border: "2px solid #1e293b", borderTopColor: "#6366f1", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto 10px" }} />
-            <p style={{ fontSize: 11, fontFamily: "monospace" }}>SELECT * FROM products...</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 12 }}>
-            {filtered.map((product) => (
-              <div key={product.id} style={{ background: "#1e293b", borderRadius: 12, padding: 16, border: `1px solid ${product.quantity < 10 ? "#7c2d12" : "#334155"}`, display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                  <span style={{ color: "#334155", fontSize: 9, fontFamily: "monospace" }}>id:{product.id}</span>
-                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                    {product.quantity < 10 && <span style={{ background: "#7c2d12", color: "#fb923c", fontSize: 8, borderRadius: 3, padding: "1px 5px", fontWeight: 700 }}>LOW</span>}
-                    <span style={{ background: "#1e293b", color: "#475569", fontSize: 8, borderRadius: 3, padding: "1px 5px", border: "1px solid #334155" }}>{product.category}</span>
+        <div className="flex-1 flex">
+          <main className={`flex-1 min-w-0 transition-all duration-200 ${showLogs ? "lg:max-w-[calc(100%-280px)]" : ""}`}>
+            <div className="px-4 sm:px-6 py-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 animate-fadeIn">
+                {stats.map((s, i) => (
+                  <div key={s.label} className={`bg-surface border border-border rounded-xl px-4 sm:px-5 py-4 animate-fadeInUp delay-${i + 1}`}>
+                    <p className="text-muted text-[10px] sm:text-xs uppercase tracking-wider mb-1.5 font-medium">{s.label}</p>
+                    <p className={`text-xl sm:text-2xl font-semibold ${s.accent ? "text-accent" : s.danger ? "text-danger" : "text-fg"}`}>{s.value}</p>
                   </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 mb-5 items-stretch sm:items-center animate-fadeInUp delay-3">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm pointer-events-none">&#x1F50D;</span>
+                  <input value={search} onChange={(e) => { setSearch(e.target.value); log("UI", `Search: "${e.target.value}"`); }} placeholder="Search products or category..." className="w-full bg-surface border border-border rounded-xl pl-9 pr-3.5 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors" />
                 </div>
-                <p style={{ color: "white", fontSize: 13, fontWeight: 600, margin: "0 0 6px", flex: 1 }}>{product.name}</p>
-                <p style={{ color: "#818cf8", fontSize: 17, fontWeight: 700, margin: "0 0 3px" }}>INR {Number(product.price).toLocaleString()}</p>
-                <p style={{ color: "#475569", fontSize: 11, margin: "0 0 12px" }}>Stock: {product.quantity} units</p>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => { setEditProduct(product); log("UI", `Edit modal opened for "${product.name}"`); }} style={{ flex: 1, background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: "5px 0", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                  <button onClick={() => del(product.id)} disabled={deleting === product.id} style={{ flex: 1, background: "none", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 6, padding: "5px 0", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                    {deleting === product.id ? (
-                      <>
-                        <Spin s={10} />
-                        <span>...</span>
-                      </>
-                    ) : "Delete"}
+                <div className="flex gap-1.5">
+                  {([["all", "All"], ["low", "Low"], ["ok", "OK"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => { setFilter(v); log("UI", `Filter: ${l}`); }} className={`text-xs sm:text-sm rounded-lg px-3.5 py-2 border transition-colors ${filter === v ? "bg-accent text-bg border-accent font-medium" : "bg-transparent text-muted border-border hover:border-muted hover:text-subtle"}`}>{l}</button>
+                  ))}
+                </div>
+                <button onClick={() => setShowForm((prev) => !prev)} className={`text-sm font-medium rounded-xl px-4 py-2.5 transition-colors whitespace-nowrap ${showForm ? "border border-border text-muted bg-surface" : "bg-accent hover:bg-accent-hover text-bg"}`}>
+                  {showForm ? "Cancel" : "+ Add"}
+                </button>
+              </div>
+
+              {showForm && (
+                <div className="bg-surface border border-border rounded-xl p-4 sm:p-5 mb-6 animate-fadeIn">
+                  <p className="text-muted text-[10px] font-mono mb-3">POST /api/products &rarr; supabase.from(&apos;products&apos;).insert(body)</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    {([["Name", "name", "text"], ["Price", "price", "number"], ["Qty", "quantity", "number"], ["Category", "category", "text"]] as const).map(([l, k, t]) => (
+                      <div key={k}>
+                        <label className="text-muted text-[10px] uppercase block mb-1.5 font-medium">{l}</label>
+                        <input type={t} value={form[k]} onChange={(e) => setForm((prev) => ({ ...prev, [k]: e.target.value }))} className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-fg text-sm outline-none focus:border-muted transition-colors" />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={add} disabled={adding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-semibold rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
+                    {adding ? <><Spin s={11} /><span>Inserting...</span></> : "Save to Database"}
                   </button>
                 </div>
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#334155" }}>
-                <p style={{ fontSize: 24, marginBottom: 8 }}>?</p>
-                <p style={{ fontSize: 13, marginBottom: 12 }}>
-                  {products.length === 0 ? "No products yet." : "No products match your search."}
+              )}
+
+              {(search || filter !== "all") && (
+                <p className="text-muted text-xs mb-4 animate-fadeIn">
+                  Showing {filtered.length} of {products.length} products
+                  {search && <> matching &ldquo;<span className="text-subtle">{search}</span>&rdquo;</>}
+                  {filter !== "all" && <> &mdash; <span className="text-subtle">{filter === "low" ? "Low Stock" : "In Stock"}</span></>}
                 </p>
-                {products.length === 0 && (
-                  <button
-                    onClick={seedSamples}
-                    disabled={seeding}
-                    style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                  >
-                    {seeding ? "Loading samples..." : "Load sample products"}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+              )}
+
+              {loading ? (
+                <div className="text-center py-20 text-muted animate-fadeIn">
+                  <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-xs font-mono">SELECT * FROM products...</p>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-16 border border-dashed border-border rounded-2xl animate-fadeIn">
+                  <p className="text-2xl mb-2 text-muted">&#x2205;</p>
+                  <p className="text-sm text-muted mb-4">{products.length === 0 ? "No products yet." : "No products match your search."}</p>
+                  {products.length === 0 && (
+                    <button onClick={seedSamples} disabled={seeding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors">
+                      {seeding ? "Loading samples..." : "Load sample products"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="animate-fadeIn space-y-1.5">
+                  {filtered.map((product, i) => (
+                    <div
+                      key={product.id}
+                      className={`animate-slideInLeft flex items-center gap-3 sm:gap-4 bg-surface border border-border rounded-xl px-4 sm:px-5 py-3.5 hover:border-muted transition-all duration-200 hover:translate-x-0.5 ${deleting === product.id ? "opacity-40" : ""}`}
+                      style={{ animationDelay: `${Math.min(i * 0.03, 0.3)}s` }}
+                    >
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${product.quantity < 10 ? "bg-danger" : product.quantity < 25 ? "bg-warning" : "bg-accent"}`} />
+                      <span className="text-muted text-[10px] font-mono w-8 flex-shrink-0">#{product.id}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-fg text-sm font-medium truncate">{product.name}</span>
+                          {product.quantity < 10 && <span className="text-[10px] font-semibold text-danger bg-low-bg border border-low-border rounded px-1.5 py-0.5 flex-shrink-0">LOW</span>}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
+                          <span>{product.category}</span>
+                          <span>&middot;</span>
+                          <span>{product.quantity} units</span>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-fg text-sm font-semibold">INR {Number(product.price).toLocaleString()}</p>
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <button onClick={() => { setEditProduct(product); log("UI", `Edit modal opened for "${product.name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-lg px-3 py-1.5 text-xs transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => del(product.id)} disabled={deleting === product.id} className="border border-border text-muted hover:text-danger hover:border-danger rounded-lg px-3 py-1.5 text-xs transition-colors flex items-center gap-1">
+                          {deleting === product.id ? <><Spin s={10} /><span>...</span></> : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+
+          {showLogs && (
+            <div className="hidden lg:block w-[280px] border-l border-border animate-slideInRight">
+              <LogPanel logs={logs} onClear={onClearLogs} />
+            </div>
+          )}
+        </div>
       </div>
 
       {editProduct && <EditModal product={editProduct} onSave={save} onClose={() => setEditProduct(null)} />}
 
-      <button onClick={() => { setShowChat((prev) => !prev); log("UI", showChat ? "Chat closed" : "AI Agent opened"); }} style={{ position: "fixed", bottom: 20, right: 20, width: 50, height: 50, borderRadius: "50%", background: showChat ? "#334155" : "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none", cursor: "pointer", fontSize: 13, color: "white", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
-        {showChat ? "close" : "AI"}
+      <button onClick={() => { setShowChat((prev) => !prev); log("UI", showChat ? "Chat closed" : "AI Agent opened"); }} className={`fixed bottom-5 right-5 w-11 h-11 rounded-full border text-xs font-semibold transition-all duration-200 z-50 flex items-center justify-center shadow-lg hover:scale-105 ${showChat ? "bg-surface border-border text-muted" : "bg-accent hover:bg-accent-hover border-accent text-bg shadow-accent/20"}`}>
+        {showChat ? "\u00D7" : "AI"}
       </button>
 
       {showChat && <Chat products={products} onProductsChange={setProducts} log={log} onClose={() => setShowChat(false)} />}

@@ -13,8 +13,8 @@ type AuthProps = {
 };
 
 export default function Auth({ mode, go, onAuth, log }: AuthProps) {
-  const [email, setEmail] = useState(mode === "login" ? "" : "");
-  const [pass, setPass] = useState(mode === "login" ? "" : "");
+  const [email, setEmail] = useState(mode === "login" ? "kori@dev.com" : "");
+  const [pass, setPass] = useState(mode === "login" ? "1234" : "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -39,35 +39,37 @@ export default function Auth({ mode, go, onAuth, log }: AuthProps) {
   }
 
   return (
-    <div style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 14, padding: 28, width: "100%", maxWidth: 320 }}>
-        <p style={{ color: "#334155", fontSize: 10, fontFamily: "monospace", marginBottom: 14 }}>app/{mode}/page.tsx</p>
-        <h2 style={{ color: "white", fontSize: 20, fontWeight: 700, marginBottom: 20, fontFamily: "Georgia,serif" }}>{mode === "login" ? "Welcome back" : "Create account"}</h2>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ color: "#475569", fontSize: 11, display: "block", marginBottom: 4 }}>EMAIL</label>
-          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} style={{ width: "100%", background: "#0f172a", border: "1px solid #334155", borderRadius: 7, padding: "9px 11px", color: "white", fontSize: 13, boxSizing: "border-box", outline: "none" }} />
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-sm animate-fadeInUp">
+        <div className="border border-border rounded-2xl p-8 bg-surface">
+          <p className="text-muted text-[10px] font-mono mb-4">app/{mode}/page.tsx</p>
+          <h2 className="text-fg text-2xl font-medium mb-8">{mode === "login" ? "Welcome back" : "Create account"}</h2>
+          <div className="mb-4">
+            <label className="text-muted text-xs block mb-1.5">EMAIL</label>
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors" />
+          </div>
+          <div className="mb-4">
+            <label className="text-muted text-xs block mb-1.5">PASSWORD</label>
+            <input type="password" value={pass} onChange={(event) => setPass(event.target.value)} className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors" />
+          </div>
+          {err && <p className="text-danger text-xs mb-3">{err}</p>}
+          <button onClick={submit} disabled={busy} className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-semibold rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2">
+            {busy ? (
+              <>
+                <Spin />
+                <span>Processing...</span>
+              </>
+            ) : mode === "login" ? "Log In" : "Sign Up"}
+          </button>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ color: "#475569", fontSize: 11, display: "block", marginBottom: 4 }}>PASSWORD</label>
-          <input type="password" value={pass} onChange={(event) => setPass(event.target.value)} style={{ width: "100%", background: "#0f172a", border: "1px solid #334155", borderRadius: 7, padding: "9px 11px", color: "white", fontSize: 13, boxSizing: "border-box", outline: "none" }} />
-        </div>
-        {err && <p style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>Error: {err}</p>}
-        <button onClick={submit} disabled={busy} style={{ width: "100%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "white", border: "none", borderRadius: 9, padding: 11, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          {busy ? (
-            <>
-              <Spin />
-              <span>Processing...</span>
-            </>
-          ) : mode === "login" ? "Log In" : "Sign Up"}
-        </button>
-        <p style={{ color: "#475569", fontSize: 12, textAlign: "center", marginTop: 14 }}>
+        <p className="text-muted text-xs text-center mt-6">
           {mode === "login" ? "No account? " : "Have one? "}
-          <span onClick={() => go(mode === "login" ? "signup" : "login")} style={{ color: "#818cf8", cursor: "pointer" }}>
+          <span onClick={() => go(mode === "login" ? "signup" : "login")} className="text-accent hover:text-accent-hover cursor-pointer transition-colors">
             {mode === "login" ? "Sign up" : "Log in"}
           </span>
         </p>
-        <p onClick={() => go("landing")} style={{ color: "#334155", fontSize: 11, textAlign: "center", marginTop: 6, cursor: "pointer" }}>
-          &lt;- back
+        <p onClick={() => go("landing")} className="text-muted text-[11px] text-center mt-3 cursor-pointer hover:text-subtle transition-colors">
+          &larr; back
         </p>
       </div>
     </div>

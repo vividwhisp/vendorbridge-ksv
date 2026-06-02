@@ -5,14 +5,12 @@ type SpinProps = {
 export default function Spin({ s = 12 }: SpinProps) {
   return (
     <div
+      className="rounded-full animate-spin flex-shrink-0"
       style={{
         width: s,
         height: s,
-        borderRadius: "50%",
-        border: "2px solid rgba(255,255,255,0.15)",
-        borderTopColor: "rgba(255,255,255,0.8)",
-        animation: "spin 0.7s linear infinite",
-        flexShrink: 0,
+        border: "2px solid rgba(255,255,255,0.1)",
+        borderTopColor: "rgba(255,255,255,0.7)",
       }}
     />
   );

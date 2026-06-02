@@ -4,43 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import { db } from "../lib/supabase-db";
 import type { LogFn, Product } from "../types";
 
-type SpeechRecognitionResultLike = {
-  [index: number]: { transcript: string };
-};
-
-type SpeechRecognitionEventLike = {
-  results: ArrayLike<SpeechRecognitionResultLike>;
-};
-
+type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
+type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike> };
 type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
+  lang: string; interimResults: boolean; continuous: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  start: () => void;
-  stop: () => void;
+  onend: (() => void) | null; onerror: (() => void) | null;
+  start: () => void; stop: () => void;
 };
-
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 type AgentResponse = {
   action?: "update_stock" | "delete_product" | "add_product" | "query";
-  productId?: number;
-  newQuantity?: number;
-  name?: string;
-  price?: number;
-  quantity?: number;
-  category?: string;
-  message?: string;
+  productId?: number; newQuantity?: number; name?: string;
+  price?: number; quantity?: number; category?: string; message?: string;
 };
 
-type Message = {
-  role: "ai" | "user";
-  text: string;
-  action?: Exclude<AgentResponse["action"], "query"> | null;
-};
+type Message = { role: "ai" | "user"; text: string; action?: Exclude<AgentResponse["action"], "query"> | null };
 
 type ChatProps = {
   products: Product[];
@@ -76,7 +56,7 @@ ${lang === "hi" ? "Respond entirely in Hindi. Message field must be in Hindi." :
 export default function Chat({ products, onProductsChange, log, onClose }: ChatProps) {
   const [lang, setLang] = useState("en");
   const [msgs, setMsgs] = useState<Message[]>([
-    { role: "ai", text: "Hey! I am your inventory agent. I can answer questions and take actions. Try add 20 units to iPhone or show low stock." },
+    { role: "ai", text: "Hey! I am your inventory agent. I can answer questions and take actions. Try \"add 20 units to iPhone\" or \"show low stock\"." },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -84,16 +64,20 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
   const [speaking, setSpeaking] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  function speak(text: string) {
-    if (!window.speechSynthesis) {
-      return;
-    }
+  useEffect(() => {
+    panelRef.current?.classList.remove("animate-fadeInUp");
+    void panelRef.current?.offsetWidth;
+    panelRef.current?.classList.add("animate-fadeInUp");
+  }, []);
 
+  function speak(text: string) {
+    if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "hi" ? "hi-IN" : "en-US";
@@ -103,63 +87,38 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
     window.speechSynthesis.speak(utterance);
   }
 
-  function stopSpeak() {
-    window.speechSynthesis?.cancel();
-    setSpeaking(false);
-  }
+  function stopSpeak() { window.speechSynthesis?.cancel(); setSpeaking(false); }
 
   function startListen() {
-    const browserWindow = window as Window & {
-      SpeechRecognition?: SpeechRecognitionCtor;
-      webkitSpeechRecognition?: SpeechRecognitionCtor;
-    };
-    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
-
-    if (!Recognition) {
-      alert("Use Chrome or Edge for voice.");
-      return;
-    }
-
+    const W = window as Window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor; };
+    const Recognition = W.SpeechRecognition || W.webkitSpeechRecognition;
+    if (!Recognition) { alert("Use Chrome or Edge for voice."); return; }
     const recognition = new Recognition();
     recognition.lang = lang === "hi" ? "hi-IN" : "en-US";
     recognition.interimResults = true;
     recognition.continuous = false;
     recRef.current = recognition;
     setListening(true);
-    recognition.onresult = (event) => {
-      const text = Array.from(event.results).map((result) => result[0].transcript).join("");
-      setInput(text);
-    };
+    recognition.onresult = (event) => { setInput(Array.from(event.results).map((r) => r[0].transcript).join("")); };
     recognition.onend = () => setListening(false);
     recognition.onerror = () => setListening(false);
     recognition.start();
   }
 
-  function stopListen() {
-    recRef.current?.stop();
-    setListening(false);
-  }
+  function stopListen() { recRef.current?.stop(); setListening(false); }
 
   function switchLang(nextLang: string) {
     setLang(nextLang);
     stopSpeak();
-    setMsgs([
-      {
-        role: "ai",
-        text: nextLang === "hi"
-          ? "Namaste! Main aapka inventory agent hoon. Aap stock query ya update command de sakte hain."
-          : "Hey! I am your inventory agent. I can answer questions and take actions. Try add 20 units to iPhone or show low stock.",
-      },
-    ]);
+    setMsgs([{
+      role: "ai",
+      text: nextLang === "hi" ? "Namaste! Main aapka inventory agent hoon. Aap stock query ya update command de sakte hain." : "Hey! I am your inventory agent. I can answer questions and take actions. Try \"add 20 units to iPhone\" or \"show low stock\".",
+    }]);
   }
 
   async function ask(text?: string) {
     const q = text || input.trim();
-
-    if (!q || busy) {
-      return;
-    }
-
+    if (!q || busy) return;
     setInput("");
     setMsgs((prev) => [...prev, { role: "user", text: q }]);
     setBusy(true);
@@ -172,25 +131,14 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system: buildAgentSystem(products, lang),
-          messages: [{ role: "user", content: q }],
-        }),
+        body: JSON.stringify({ system: buildAgentSystem(products, lang), messages: [{ role: "user", content: q }] }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || "AI request failed");
-      }
+      if (!res.ok) throw new Error(data?.error || "AI request failed");
 
       const raw = data?.message || "{}";
-
       let parsed: AgentResponse;
-      try {
-        parsed = JSON.parse(raw) as AgentResponse;
-      } catch {
-        parsed = { action: "query", message: raw };
-      }
+      try { parsed = JSON.parse(raw) as AgentResponse; } catch { parsed = { action: "query", message: raw }; }
 
       log("LLM", `Intent: ${parsed.action ?? "query"}`, true);
 
@@ -221,11 +169,9 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
       setMsgs((prev) => [...prev, { role: "ai", text: reply, action: parsed.action !== "query" ? parsed.action : null }]);
       speak(reply);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
       setMsgs((prev) => [...prev, { role: "ai", text: "Error - try again." }]);
-      log("LLM", `Error: ${message}`, false, true);
+      log("LLM", `Error: ${error instanceof Error ? error.message : "Unknown error"}`, false, true);
     }
-
     setBusy(false);
   }
 
@@ -234,66 +180,66 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
     : ["Add 20 units to iPhone", "Which products are low on stock?", "What is my total inventory value?", "Delete Magic Keyboard"];
 
   return (
-    <div style={{ position: "fixed", bottom: 72, right: 20, width: 330, height: 460, background: "#1e293b", border: "1px solid #334155", borderRadius: 14, display: "flex", flexDirection: "column", zIndex: 200 }}>
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid #334155", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: speaking ? "#4ade80" : "#6366f1", boxShadow: speaking ? "0 0 8px #4ade80" : "none", transition: "all 0.3s" }} />
-          <span style={{ color: "white", fontSize: 13, fontWeight: 600 }}>AI Agent</span>
-          <span style={{ color: "#334155", fontSize: 9, fontFamily: "monospace" }}>openrouter</span>
+    <div ref={panelRef} className="fixed bottom-20 right-5 w-[calc(100vw-2.5rem)] sm:w-[330px] h-[460px] bg-surface border border-border rounded-xl flex flex-col z-50 shadow-2xl">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${speaking ? "bg-accent shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-muted"}`} />
+          <span className="text-fg text-sm font-medium">AI Agent</span>
+          <span className="text-muted text-[10px] font-mono">openrouter</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {["en", "hi"].map((item) => (
-            <button key={item} onClick={() => switchLang(item)} style={{ background: lang === item ? "#6366f1" : "transparent", color: lang === item ? "white" : "#475569", border: "1px solid #334155", borderRadius: 4, padding: "2px 7px", fontSize: 10, cursor: "pointer" }}>
-              {item === "hi" ? "HI" : "EN"}
+        <div className="flex items-center gap-1.5">
+          {(["en", "hi"] as const).map((item) => (
+            <button key={item} onClick={() => switchLang(item)} className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${lang === item ? "bg-accent text-bg border-accent font-medium" : "bg-transparent text-muted border-border hover:border-muted"}`}>
+              {item.toUpperCase()}
             </button>
           ))}
-          <span onClick={onClose} style={{ color: "#64748b", cursor: "pointer", fontSize: 18, lineHeight: 1, marginLeft: 2 }}>x</span>
+          <button onClick={onClose} className="text-muted hover:text-fg text-lg leading-none ml-1 transition-colors">&times;</button>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2.5">
         {msgs.map((message, index) => (
-          <div key={`${message.role}-${index}`} style={{ display: "flex", justifyContent: message.role === "user" ? "flex-end" : "flex-start", flexDirection: "column", alignItems: message.role === "user" ? "flex-end" : "flex-start" }}>
-            {message.action && <span style={{ background: "#1e3a1e", color: "#4ade80", fontSize: 9, borderRadius: 4, padding: "2px 7px", marginBottom: 4, fontWeight: 700 }}>{actionBadge[message.action] || message.action}</span>}
-            <div style={{ maxWidth: "86%", background: message.role === "user" ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#0f172a", border: message.role === "ai" ? "1px solid #1e293b" : "none", borderRadius: message.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", padding: "9px 12px", color: "white", fontSize: 12, lineHeight: 1.6 }}>
+          <div key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"} animate-fadeIn`} style={{ animationDelay: `${index * 0.05}s` }}>
+            {message.action && (
+              <span className="text-[10px] font-semibold text-accent bg-ok-bg border border-ok-border rounded px-1.5 py-0.5 mb-1">
+                {actionBadge[message.action] || message.action}
+              </span>
+            )}
+            <div className={`max-w-[88%] px-3.5 py-2.5 text-xs leading-relaxed ${
+              message.role === "user" ? "bg-accent text-bg rounded-2xl rounded-br-sm" : "bg-bg border border-surface text-fg rounded-2xl rounded-bl-sm"
+            }`}>
               {message.text}
             </div>
           </div>
         ))}
         {busy && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px 12px 12px 3px", padding: "10px 14px", display: "flex", gap: 4 }}>
-              {[0, 1, 2].map((item) => <div key={item} style={{ width: 5, height: 5, borderRadius: "50%", background: "#6366f1", animation: `bounce 1s ${item * 0.2}s infinite` }} />)}
+          <div className="flex items-center gap-2 animate-fadeIn">
+            <div className="bg-bg border border-surface rounded-2xl rounded-bl-sm px-4 py-3 flex gap-1">
+              {[0, 1, 2].map((i) => <div key={i} className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: `${i * 0.2}s` }} />)}
             </div>
-            <span style={{ color: "#334155", fontSize: 10 }}>thinking...</span>
+            <span className="text-muted text-[10px]">thinking...</span>
           </div>
         )}
         <div ref={ref} />
       </div>
 
       {msgs.length <= 2 && !busy && (
-        <div style={{ padding: "0 10px 8px", display: "flex", flexDirection: "column", gap: 5 }}>
-          {tips.map((tip) => (
-            <div key={tip} onClick={() => ask(tip)} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 7, padding: "7px 10px", color: "#475569", fontSize: 11, cursor: "pointer", lineHeight: 1.4 }}>{tip}</div>
+        <div className="px-3 pb-2 flex flex-col gap-1">
+          {tips.map((tip, i) => (
+            <div key={tip} onClick={() => ask(tip)} className="bg-bg border border-surface rounded-lg px-3 py-2 text-muted text-[11px] cursor-pointer leading-relaxed hover:border-muted transition-colors animate-fadeIn" style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
+              {tip}
+            </div>
           ))}
         </div>
       )}
 
-      <div style={{ padding: "8px 10px", borderTop: "1px solid #334155", display: "flex", gap: 6, alignItems: "center" }}>
-        <button onClick={listening ? stopListen : startListen} style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid #334155", background: listening ? "#dc2626" : "#0f172a", color: listening ? "white" : "#64748b", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, animation: listening ? "pulse 1s infinite" : "none" }}>
+      <div className="flex items-center gap-1.5 px-3 py-2.5 border-t border-border">
+        <button onClick={listening ? stopListen : startListen} className={`w-8 h-8 rounded-lg border flex items-center justify-center text-[10px] flex-shrink-0 transition-colors ${listening ? "bg-danger border-danger text-fg animate-pulse" : "bg-bg border-border text-muted hover:border-muted"}`}>
           {listening ? "stop" : "mic"}
         </button>
-        <input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => event.key === "Enter" && ask()}
-          placeholder={listening ? (lang === "hi" ? "Boliye..." : "Listening...") : (lang === "hi" ? "Command dijiye..." : "Type or speak a command...")}
-          style={{ flex: 1, background: "#0f172a", border: `1px solid ${listening ? "#dc2626" : "#1e293b"}`, borderRadius: 7, padding: "7px 10px", color: "white", fontSize: 12, outline: "none" }}
-        />
-        {speaking && <button onClick={stopSpeak} style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: "#6366f1", color: "white", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>mute</button>}
-        <button onClick={() => ask()} disabled={busy || !input.trim()} style={{ width: 32, height: 32, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", border: "none", borderRadius: 7, color: "white", fontSize: 14, cursor: "pointer", opacity: busy || !input.trim() ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          ^
-        </button>
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder={listening ? (lang === "hi" ? "Boliye..." : "Listening...") : (lang === "hi" ? "Command dijiye..." : "Type or speak a command...")} className={`flex-1 bg-bg border rounded-lg px-3 py-1.5 text-fg text-xs outline-none transition-colors ${listening ? "border-danger" : "border-surface focus:border-muted"}`} />
+        {speaking && <button onClick={stopSpeak} className="w-8 h-8 rounded-lg bg-accent text-bg text-[10px] flex items-center justify-center flex-shrink-0 transition-colors hover:bg-accent-hover">mute</button>}
+        <button onClick={() => ask()} disabled={busy || !input.trim()} className="w-8 h-8 bg-accent hover:bg-accent-hover disabled:opacity-40 rounded-lg text-bg text-sm flex items-center justify-center flex-shrink-0 transition-colors">&uarr;</button>
       </div>
     </div>
   );

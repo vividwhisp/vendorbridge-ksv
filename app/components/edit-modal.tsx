@@ -26,32 +26,32 @@ export default function EditModal({ product, onSave, onClose }: EditModalProps) 
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500 }}>
-      <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 14, padding: 24, width: 340 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ color: "white", fontSize: 16, fontWeight: 700 }}>Edit Product</h3>
-          <span onClick={onClose} style={{ color: "#64748b", cursor: "pointer", fontSize: 20 }}>x</span>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-fg text-lg font-medium">Edit Product</h3>
+          <button onClick={onClose} className="text-muted hover:text-fg text-lg transition-colors">&times;</button>
         </div>
-        <p style={{ color: "#334155", fontSize: 9, fontFamily: "monospace", marginBottom: 14 }}>PUT /api/products/{product.id} -&gt; supabase.from(&apos;products&apos;).update(data)</p>
+        <p className="text-muted text-[10px] font-mono mb-5">PUT /api/products/{product.id}</p>
         {[
           ["Product Name", "name", "text"],
           ["Price (INR)", "price", "number"],
           ["Quantity", "quantity", "number"],
           ["Category", "category", "text"],
         ].map(([label, key, type]) => (
-          <div key={key} style={{ marginBottom: 12 }}>
-            <label style={{ color: "#475569", fontSize: 11, display: "block", marginBottom: 4 }}>{label.toUpperCase()}</label>
+          <div key={key} className="mb-4">
+            <label className="text-muted text-xs block mb-1">{label}</label>
             <input
               type={type}
               value={form[key as keyof typeof form]}
               onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
-              style={{ width: "100%", background: "#0f172a", border: "1px solid #334155", borderRadius: 7, padding: "8px 10px", color: "white", fontSize: 13, boxSizing: "border-box", outline: "none" }}
+              className="w-full bg-bg border border-border rounded-xl px-3.5 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors"
             />
           </div>
         ))}
-        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-          <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "1px solid #334155", color: "#64748b", borderRadius: 8, padding: "9px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-          <button onClick={save} disabled={busy} style={{ flex: 1, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "white", border: "none", borderRadius: 8, padding: "9px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <div className="flex gap-3 mt-6">
+          <button onClick={onClose} className="flex-1 border border-border text-muted hover:text-fg rounded-xl py-2.5 text-sm transition-colors">Cancel</button>
+          <button onClick={save} disabled={busy} className="flex-1 bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg rounded-xl py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
             {busy ? (
               <>
                 <Spin s={11} />
