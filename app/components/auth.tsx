@@ -13,8 +13,8 @@ type AuthProps = {
 };
 
 export default function Auth({ mode, go, onAuth, log }: AuthProps) {
-  const [email, setEmail] = useState(mode === "login" ? "kori@dev.com" : "");
-  const [pass, setPass] = useState(mode === "login" ? "1234" : "");
+  const [email, setEmail] = useState(mode === "login" ? "" : "");
+  const [pass, setPass] = useState(mode === "login" ? "" : "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
