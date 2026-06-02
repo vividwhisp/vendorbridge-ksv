@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { wait } from "../lib/mock-db";
 import type { Product } from "../types";
 import Spin from "./spin";
 
 type EditModalProps = {
   product: Product;
-  onSave: (id: number, data: Partial<Omit<Product, "id">>) => void;
+  onSave: (id: number, data: Partial<Omit<Product, "id">>) => Promise<void> | void;
   onClose: () => void;
 };
 
@@ -22,8 +21,7 @@ export default function EditModal({ product, onSave, onClose }: EditModalProps) 
 
   async function save() {
     setBusy(true);
-    await wait(600);
-    onSave(product.id, { ...form, price: Number(form.price), quantity: Number(form.quantity) });
+    await onSave(product.id, { ...form, price: Number(form.price), quantity: Number(form.quantity) });
     setBusy(false);
   }
 

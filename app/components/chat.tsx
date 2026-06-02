@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { db } from "../lib/mock-db";
+import { db } from "../lib/supabase-db";
 import type { LogFn, Product } from "../types";
 
 type SpeechRecognitionResultLike = {

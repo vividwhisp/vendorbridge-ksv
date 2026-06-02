@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "../lib/mock-db";
+import { db } from "../lib/supabase-db";
 import type { AuthMode, LogFn, PageView, User } from "../types";
 import Spin from "./spin";
 

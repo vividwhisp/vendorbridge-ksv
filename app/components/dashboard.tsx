@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { db } from "../lib/mock-db";
+import { useEffect, useState } from "react";
+import { db } from "../lib/supabase-db";
 import type { LogFn, Product, User } from "../types";
 import Chat from "./chat";
 import EditModal from "./edit-modal";
@@ -16,8 +16,8 @@ type DashboardProps = {
 const emptyForm = { name: "", price: "", quantity: "", category: "" };
 
 export default function Dashboard({ user, onLogout, log }: DashboardProps) {
-  const [products, setProducts] = useState<Product[]>(() => db.snapshot());
-  const [loading] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -25,7 +25,32 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
   const [showChat, setShowChat] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    db.getAll()
+      .then((data) => {
+        if (!cancelled) {
+          setProducts(data);
+          setLoading(false);
+          log("DB", `${data.length} products loaded from Supabase`, true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Could not load products.";
+          log("DB", message, false, true);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [log]);
 
   async function add() {
     if (!form.name || !form.price || !form.quantity) {
@@ -35,36 +60,69 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
     setAdding(true);
     log("API", "POST /api/products");
     log("DB", `supabase.from('products').insert({name:'${form.name}'})`);
-    const row = await db.insert({
-      name: form.name,
-      price: Number(form.price),
-      quantity: Number(form.quantity),
-      category: form.category || "General",
-    });
-    log("DB", `Row inserted -> id:${row.id}`, true);
-    setProducts((prev) => [...prev, row]);
-    setForm(emptyForm);
-    setShowForm(false);
-    setAdding(false);
+    try {
+      const row = await db.insert({
+        name: form.name,
+        price: Number(form.price),
+        quantity: Number(form.quantity),
+        category: form.category || "General",
+      });
+      log("DB", `Row inserted -> id:${row.id}`, true);
+      setProducts((prev) => [...prev, row]);
+      setForm(emptyForm);
+      setShowForm(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not add product.";
+      log("DB", message, false, true);
+    } finally {
+      setAdding(false);
+    }
   }
 
   async function save(id: number, data: Partial<Omit<Product, "id">>) {
     log("API", `PUT /api/products/${id}`);
     log("DB", `supabase.from('products').update(data).eq('id',${id})`);
-    await db.update(id, data);
-    log("DB", "Row updated", true);
-    setProducts((prev) => prev.map((item) => item.id === id ? { ...item, ...data } : item));
-    setEditProduct(null);
+    try {
+      const updated = await db.update(id, data);
+      log("DB", "Row updated", true);
+      setProducts((prev) => prev.map((item) => item.id === id ? updated : item));
+      setEditProduct(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not update product.";
+      log("DB", message, false, true);
+    }
   }
 
   async function del(id: number) {
     setDeleting(id);
     log("API", `DELETE /api/products/${id}`);
     log("DB", `supabase.from('products').delete().eq('id',${id})`);
-    await db.remove(id);
-    log("DB", "Deleted", true);
-    setProducts((prev) => prev.filter((item) => item.id !== id));
-    setDeleting(null);
+    try {
+      await db.remove(id);
+      log("DB", "Deleted", true);
+      setProducts((prev) => prev.filter((item) => item.id !== id));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not delete product.";
+      log("DB", message, false, true);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function seedSamples() {
+    setSeeding(true);
+    log("DB", "Loading sample products for current Supabase user...");
+
+    try {
+      const rows = await db.seedStarterProducts();
+      log("DB", `${rows.length} sample products inserted`, true);
+      setProducts((prev) => [...prev, ...rows]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load sample products.";
+      log("DB", message, false, true);
+    } finally {
+      setSeeding(false);
+    }
   }
 
   async function logout() {
@@ -208,7 +266,18 @@ export default function Dashboard({ user, onLogout, log }: DashboardProps) {
             {filtered.length === 0 && (
               <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "#334155" }}>
                 <p style={{ fontSize: 24, marginBottom: 8 }}>?</p>
-                <p style={{ fontSize: 13 }}>No products match your search.</p>
+                <p style={{ fontSize: 13, marginBottom: 12 }}>
+                  {products.length === 0 ? "No products yet." : "No products match your search."}
+                </p>
+                {products.length === 0 && (
+                  <button
+                    onClick={seedSamples}
+                    disabled={seeding}
+                    style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    {seeding ? "Loading samples..." : "Load sample products"}
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -1,7 +1,6 @@
 export type User = {
-  id: number;
+  id: string;
   email: string;
-  password: string;
 };
 
 export type Product = {
@@ -10,6 +9,7 @@ export type Product = {
   price: number;
   quantity: number;
   category: string;
+  user_id?: string;
 };
 
 export type LogEntry = {
