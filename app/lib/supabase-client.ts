@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { requireEnv } from "./env";
 
 export type Database = {
   public: {
@@ -48,12 +49,8 @@ export function getSupabase() {
     return client;
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.");
-  }
+  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
   client = createClient<Database, "public">(supabaseUrl, supabaseAnonKey);
 

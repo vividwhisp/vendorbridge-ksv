@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireEnv } from "@/app/lib/env";
 
 type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -6,11 +7,12 @@ type ChatMessage = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = requireEnv("OPENROUTER_API_KEY");
+  const model = requireEnv("OPENROUTER_MODEL");
 
-  if (!apiKey) {
+  if (!apiKey || !model) {
     return NextResponse.json(
-      { error: "Missing OPENROUTER_API_KEY in .env.local" },
+      { error: "Missing OPENROUTER_API_KEY or OPENROUTER_MODEL" },
       { status: 500 },
     );
   }
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
       "X-Title": "Inventory Manager",
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL,
+      model,
       messages: [
         {
           role: "system",
