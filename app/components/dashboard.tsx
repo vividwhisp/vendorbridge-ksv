@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../lib/supabase-db";
 import { useLog } from "../lib/log-context";
+import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
 import type { Product, User } from "../types";
 import Chat from "./chat";
 import EditModal from "./edit-modal";
@@ -42,12 +43,12 @@ export default function DashboardView({ user }: DashboardProps) {
 
   useEffect(() => {
     let cancelled = false;
-    db.getAll()
+    apiGetAll()
       .then((data) => {
-        if (!cancelled) { setProducts(data); setLoading(false); log("DB", `${data.length} products loaded from Supabase`, true); }
+        if (!cancelled) { setProducts(data); setLoading(false); log("API", `GET /api/products -> ${data.length} products`, true); }
       })
       .catch((error: unknown) => {
-        if (!cancelled) { log("DB", error instanceof Error ? error.message : "Could not load products.", false, true); setLoading(false); }
+        if (!cancelled) { log("API", `GET /api/products -> ${error instanceof Error ? error.message : "Error"}`, false, true); setLoading(false); }
       });
     return () => { cancelled = true; };
   }, [log]);
@@ -56,53 +57,50 @@ export default function DashboardView({ user }: DashboardProps) {
     if (!form.name || !form.price || !form.quantity) return;
     setAdding(true);
     log("API", "POST /api/products");
-    log("DB", `supabase.from('products').insert({name:'${form.name}'})`);
     try {
-      const row = await db.insert({ name: form.name, price: Number(form.price), quantity: Number(form.quantity), category: form.category || "General" });
-      log("DB", `Row inserted -> id:${row.id}`, true);
+      const row = await apiInsert({ name: form.name, price: Number(form.price), quantity: Number(form.quantity), category: form.category || "General" });
+      log("API", `POST /api/products -> id:${row.id}`, true);
       setProducts((prev) => [...prev, row]);
       setForm(emptyForm);
       setShowForm(false);
     } catch (error) {
-      log("DB", error instanceof Error ? error.message : "Could not add product.", false, true);
+      log("API", `POST /api/products -> ${error instanceof Error ? error.message : "Error"}`, false, true);
     } finally { setAdding(false); }
   }
 
   async function save(id: number, data: Partial<Omit<Product, "id">>) {
     log("API", `PUT /api/products/${id}`);
-    log("DB", `supabase.from('products').update(data).eq('id',${id})`);
     try {
-      const updated = await db.update(id, data);
-      log("DB", "Row updated", true);
+      const updated = await apiUpdate(id, data);
+      log("API", `PUT /api/products/${id} -> ok`, true);
       setProducts((prev) => prev.map((item) => item.id === id ? updated : item));
       setEditProduct(null);
     } catch (error) {
-      log("DB", error instanceof Error ? error.message : "Could not update product.", false, true);
+      log("API", `PUT /api/products/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
     }
   }
 
   async function del(id: number) {
     setDeleting(id);
     log("API", `DELETE /api/products/${id}`);
-    log("DB", `supabase.from('products').delete().eq('id',${id})`);
     try {
-      await db.remove(id);
-      log("DB", "Deleted", true);
+      await apiRemove(id);
+      log("API", `DELETE /api/products/${id} -> ok`, true);
       setProducts((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
-      log("DB", error instanceof Error ? error.message : "Could not delete product.", false, true);
+      log("API", `DELETE /api/products/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
     } finally { setDeleting(null); }
   }
 
   async function seedSamples() {
     setSeeding(true);
-    log("DB", "Loading sample products for current Supabase user...");
+    log("API", "POST /api/products/seed");
     try {
-      const rows = await db.seedStarterProducts();
-      log("DB", `${rows.length} sample products inserted`, true);
+      const rows = await apiSeed();
+      log("API", `POST /api/products/seed -> ${rows.length} products`, true);
       setProducts((prev) => [...prev, ...rows]);
     } catch (error) {
-      log("DB", error instanceof Error ? error.message : "Could not load sample products.", false, true);
+      log("API", `POST /api/products/seed -> ${error instanceof Error ? error.message : "Error"}`, false, true);
     } finally { setSeeding(false); }
   }
 
@@ -244,7 +242,7 @@ export default function DashboardView({ user }: DashboardProps) {
               {loading ? (
                 <div className="text-center py-20 text-muted animate-fadeIn">
                   <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-xs font-mono">SELECT * FROM products...</p>
+                  <p className="text-xs font-mono">GET /api/products</p>
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="text-center py-16 border border-dashed border-border rounded-2xl animate-fadeIn">

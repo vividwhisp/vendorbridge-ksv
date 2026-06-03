@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { db } from "../lib/supabase-db";
+import { apiUpdate, apiRemove, apiInsert, apiGetAll } from "../lib/api-helper";
 import type { LogFn, Product } from "../types";
 
 type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
@@ -14,13 +14,18 @@ type SpeechRecognitionLike = {
 };
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
-type AgentResponse = {
-  action?: "update_stock" | "delete_product" | "add_product" | "query";
+type AgentAction = {
+  action: "update_stock" | "delete_product" | "add_product" | "query";
   productId?: number; newQuantity?: number; name?: string;
-  price?: number; quantity?: number; category?: string; message?: string;
+  price?: number; quantity?: number; category?: string;
 };
 
-type Message = { role: "ai" | "user"; text: string; action?: Exclude<AgentResponse["action"], "query"> | null };
+type AgentResponse = {
+  actions: AgentAction[];
+  message: string;
+};
+
+type Message = { role: "ai" | "user"; text: string; actions?: AgentAction[] };
 
 type ChatProps = {
   products: Product[];
@@ -29,7 +34,7 @@ type ChatProps = {
   onClose: () => void;
 };
 
-const actionBadge: Record<string, string> = {
+const actionLabels: Record<string, string> = {
   update_stock: "Stock Updated",
   delete_product: "Product Deleted",
   add_product: "Product Added",
@@ -41,16 +46,26 @@ function buildAgentSystem(products: Product[], lang: string) {
 Current products in database:
 ${JSON.stringify(products, null, 2)}
 
-You must ALWAYS respond with valid JSON only. No extra text, no markdown, no backticks.
+CRITICAL: You must ALWAYS respond with valid JSON only in this exact format. No extra text, no markdown, no backticks.
 
-For actions, respond with:
-{ "action": "update_stock", "productId": <id>, "newQuantity": <number>, "message": "<confirmation in ${lang === "hi" ? "Hindi" : "English"}>" }
-{ "action": "delete_product", "productId": <id>, "message": "<confirmation>" }
-{ "action": "add_product", "name": "<name>", "price": <number>, "quantity": <number>, "category": "<category>", "message": "<confirmation>" }
-{ "action": "query", "message": "<answer to question in ${lang === "hi" ? "Hindi" : "English"}>" }
+{
+  "actions": [
+    { "action": "update_stock", "productId": <id>, "newQuantity": <number> },
+    { "action": "delete_product", "productId": <id> },
+    { "action": "add_product", "name": "<name>", "price": <number>, "quantity": <number>, "category": "<category>" }
+  ],
+  "message": "<your response to the user in ${lang === "hi" ? "Hindi" : "English"}>"
+}
 
-Match product names flexibly. For update_stock, calculate the new quantity if user says add or remove.
-${lang === "hi" ? "Respond entirely in Hindi. Message field must be in Hindi." : "Respond in English."}`;
+RULES:
+- The "actions" array can have MULTIPLE actions (e.g., update several products at once) or be empty for queries.
+- The "message" field is what you say to the user (confirmation, answer, etc.).
+- For "update_stock": "newQuantity" must be the FINAL absolute quantity (e.g., if a product has 3 units and user says add 10, newQuantity = 13).
+- For "delete_product": only productId is needed.
+- For "add_product": provide name, price, quantity, and category.
+- For "query": return an empty actions array and your answer in message.
+- Match product names flexibly (case-insensitive, partial match).
+${lang === "hi" ? "Message field must be in Hindi." : "Message must be in English."}`;
 }
 
 export default function Chat({ products, onProductsChange, log, onClose }: ChatProps) {
@@ -112,8 +127,31 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
     stopSpeak();
     setMsgs([{
       role: "ai",
-      text: nextLang === "hi" ? "Namaste! Main aapka inventory agent hoon. Aap stock query ya update command de sakte hain." : "Hey! I am your inventory agent. I can answer questions and take actions. Try \"add 20 units to iPhone\" or \"show low stock\".",
+      text: nextLang === "hi"
+        ? "Namaste! Main aapka inventory agent hoon. Aap stock query ya update command de sakte hain."
+        : "Hey! I am your inventory agent. I can answer questions and take actions.",
     }]);
+  }
+
+  async function executeActions(actions: AgentAction[]) {
+    for (const act of actions) {
+      if (act.action === "update_stock" && act.productId && typeof act.newQuantity === "number") {
+        log("AGENT", `UPDATE products SET quantity=${act.newQuantity} WHERE id=${act.productId}`);
+        log("API", `PUT /api/products/${act.productId}`);
+        await apiUpdate(act.productId, { quantity: act.newQuantity });
+        log("API", `Stock updated: product ${act.productId} -> ${act.newQuantity}`, true);
+      } else if (act.action === "delete_product" && act.productId) {
+        log("AGENT", `DELETE FROM products WHERE id=${act.productId}`);
+        log("API", `DELETE /api/products/${act.productId}`);
+        await apiRemove(act.productId);
+        log("API", `Product ${act.productId} deleted`, true);
+      } else if (act.action === "add_product" && act.name) {
+        log("AGENT", `INSERT INTO products (name='${act.name}', price=${act.price ?? 0}, qty=${act.quantity ?? 0})`);
+        log("API", "POST /api/products");
+        await apiInsert({ name: act.name, price: act.price ?? 0, quantity: act.quantity ?? 0, category: act.category || "General" });
+        log("API", `Product "${act.name}" added`, true);
+      }
+    }
   }
 
   async function ask(text?: string) {
@@ -125,7 +163,7 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
 
     log("LLM", `User: ${q}`);
     log("AGENT", `Analyzing intent... (lang: ${lang === "hi" ? "Hindi" : "English"})`);
-    log("API", `POST /api/chat -> building agent prompt with ${products.length} products`);
+    log("API", `POST /api/chat -> ${products.length} products in context`);
 
     try {
       const res = await fetch("/api/chat", {
@@ -136,37 +174,30 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "AI request failed");
 
-      const raw = data?.message || "{}";
+      const raw = data?.message || "";
+      log("LLM", `Raw response: ${raw.substring(0, 200)}`, true);
+
       let parsed: AgentResponse;
-      try { parsed = JSON.parse(raw) as AgentResponse; } catch { parsed = { action: "query", message: raw }; }
+      try {
+        parsed = JSON.parse(raw) as AgentResponse;
+        if (!Array.isArray(parsed.actions)) throw new Error("missing actions array");
+      } catch {
+        parsed = { actions: [], message: raw };
+      }
 
-      log("LLM", `Intent: ${parsed.action ?? "query"}`, true);
+      log("LLM", `${parsed.actions.length} action(s) detected`, true);
 
-      if (parsed.action === "update_stock" && parsed.productId && typeof parsed.newQuantity === "number") {
-        log("AGENT", `UPDATE products SET quantity=${parsed.newQuantity} WHERE id=${parsed.productId}`);
-        log("DB", `supabase.from('products').update({ quantity }).eq('id', ${parsed.productId})`);
-        await db.update(parsed.productId, { quantity: parsed.newQuantity });
-        onProductsChange(await db.getAll());
-        log("DB", "Stock updated", true);
-      } else if (parsed.action === "delete_product" && parsed.productId) {
-        log("AGENT", `DELETE FROM products WHERE id=${parsed.productId}`);
-        log("DB", `supabase.from('products').delete().eq('id', ${parsed.productId})`);
-        await db.remove(parsed.productId);
-        onProductsChange(await db.getAll());
-        log("DB", "Product deleted", true);
-      } else if (parsed.action === "add_product" && parsed.name) {
-        log("AGENT", `INSERT INTO products (name,price,quantity) VALUES ('${parsed.name}',${parsed.price ?? 0},${parsed.quantity ?? 0})`);
-        log("DB", "supabase.from('products').insert({...})");
-        await db.insert({ name: parsed.name, price: parsed.price ?? 0, quantity: parsed.quantity ?? 0, category: parsed.category || "General" });
-        onProductsChange(await db.getAll());
-        log("DB", "Product added", true);
+      if (parsed.actions.length > 0) {
+        await executeActions(parsed.actions);
+        const fresh = await apiGetAll();
+        onProductsChange(fresh);
       } else {
         log("AGENT", "Query only - no DB action needed");
       }
 
       const reply = parsed.message || "Done!";
-      log("UI", "Rendering agent response and speaking", true);
-      setMsgs((prev) => [...prev, { role: "ai", text: reply, action: parsed.action !== "query" ? parsed.action : null }]);
+      log("UI", "Rendering agent response", true);
+      setMsgs((prev) => [...prev, { role: "ai", text: reply, actions: parsed.actions }]);
       speak(reply);
     } catch (error) {
       setMsgs((prev) => [...prev, { role: "ai", text: "Error - try again." }]);
@@ -200,10 +231,14 @@ export default function Chat({ products, onProductsChange, log, onClose }: ChatP
       <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2.5">
         {msgs.map((message, index) => (
           <div key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"} animate-fadeIn`} style={{ animationDelay: `${index * 0.05}s` }}>
-            {message.action && (
-              <span className="text-[10px] font-semibold text-accent bg-ok-bg border border-ok-border rounded px-1.5 py-0.5 mb-1">
-                {actionBadge[message.action] || message.action}
-              </span>
+            {message.actions && message.actions.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-1">
+                {message.actions.filter((a) => a.action !== "query").map((a, i) => (
+                  <span key={i} className="text-[10px] font-semibold text-accent bg-ok-bg border border-ok-border rounded px-1.5 py-0.5">
+                    {actionLabels[a.action] || a.action}
+                  </span>
+                ))}
+              </div>
             )}
             <div className={`max-w-[88%] px-3.5 py-2.5 text-xs leading-relaxed ${
               message.role === "user" ? "bg-accent text-bg rounded-2xl rounded-br-sm" : "bg-bg border border-surface text-fg rounded-2xl rounded-bl-sm"
