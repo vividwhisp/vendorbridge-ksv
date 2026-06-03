@@ -2,26 +2,36 @@
 
 import { useState } from "react";
 import type { Product } from "../types";
+import type { TableConfig } from "../lib/config";
 import Spin from "./spin";
 
 type EditModalProps = {
-  product: Product;
+  item: Record<string, unknown>;
+  table: TableConfig;
   onSave: (id: number, data: Partial<Omit<Product, "id">>) => Promise<void> | void;
   onClose: () => void;
 };
 
-export default function EditModal({ product, onSave, onClose }: EditModalProps) {
-  const [form, setForm] = useState({
-    name: product.name,
-    price: String(product.price),
-    quantity: String(product.quantity),
-    category: product.category,
+export default function EditModal({ item, table, onSave, onClose }: EditModalProps) {
+  const [form, setForm] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const f of table.fields) {
+      const v = item[f.key];
+      initial[f.key] = v === undefined || v === null ? "" : String(v);
+    }
+    return initial;
   });
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
-    await onSave(product.id, { ...form, price: Number(form.price), quantity: Number(form.quantity) });
+    const payload: Record<string, unknown> = {};
+    for (const f of table.fields) {
+      const v = form[f.key];
+      if (v === undefined || v === "") continue;
+      payload[f.key] = f.type === "number" ? Number(v) : v;
+    }
+    await onSave(Number(item.id), payload as Partial<Omit<Product, "id">>);
     setBusy(false);
   }
 
@@ -29,22 +39,20 @@ export default function EditModal({ product, onSave, onClose }: EditModalProps) 
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-fg text-lg font-medium">Edit Product</h3>
+          <h3 className="text-fg text-lg font-medium">Edit {table.entity.name}</h3>
           <button onClick={onClose} className="text-muted hover:text-fg text-lg transition-colors">&times;</button>
         </div>
-        <p className="text-muted text-[10px] font-mono mb-5">PUT /api/products/{product.id}</p>
-        {[
-          ["Product Name", "name", "text"],
-          ["Price (INR)", "price", "number"],
-          ["Quantity", "quantity", "number"],
-          ["Category", "category", "text"],
-        ].map(([label, key, type]) => (
-          <div key={key} className="mb-4">
-            <label className="text-muted text-xs block mb-1">{label}</label>
+        <p className="text-muted text-[10px] font-mono mb-5">PUT /api/{table.id}/{String(item.id)}</p>
+        {table.fields.map((f) => (
+          <div key={f.key} className="mb-4">
+            <label className="text-muted text-xs block mb-1">
+              {f.label}{f.required && <span className="text-danger ml-0.5">*</span>}
+            </label>
             <input
-              type={type}
-              value={form[key as keyof typeof form]}
-              onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
+              type={f.type === "number" ? "number" : "text"}
+              value={form[f.key] ?? ""}
+              placeholder={f.placeholder}
+              onChange={(event) => setForm((prev) => ({ ...prev, [f.key]: event.target.value }))}
               className="w-full bg-bg border border-border rounded-xl px-3.5 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors"
             />
           </div>

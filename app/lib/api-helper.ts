@@ -1,13 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabase } from "./supabase-client";
-import { requireEnv } from "./env";
-import type { Database } from "./supabase-client";
-import type { Product } from "../types";
+import { getTableById } from "./config";
 
 function getApiSupabase(token: string) {
-  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const key = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  return createClient<Database, "public">(url, key, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error("Missing Supabase env vars");
+  }
+  // Permissive client: we don't know the table types at compile time
+  // (the Dashboard accepts any number of tables via config). RLS is still
+  // enforced server-side by Supabase using the user's JWT.
+  return createClient(url, key, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });
@@ -32,16 +36,23 @@ function headers(token: string) {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-export async function apiGetAll(): Promise<Product[]> {
+// Returns the tableName (DB name) for a given config id, or throws.
+export function resolveTableName(id: string): string {
+  const t = getTableById(id);
+  if (!t) throw new Error(`Unknown table: ${id}`);
+  return t.tableName ?? t.id;
+}
+
+export async function apiGetAll(tableId: string): Promise<Record<string, unknown>[]> {
   const token = await getToken();
-  const res = await fetch("/api/products", { headers: headers(token!) });
+  const res = await fetch(`/api/${tableId}`, { headers: headers(token!) });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-export async function apiInsert(data: Omit<Product, "id" | "user_id">): Promise<Product> {
+export async function apiInsert(tableId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
   const token = await getToken();
-  const res = await fetch("/api/products", {
+  const res = await fetch(`/api/${tableId}`, {
     method: "POST",
     headers: headers(token!),
     body: JSON.stringify(data),
@@ -50,9 +61,9 @@ export async function apiInsert(data: Omit<Product, "id" | "user_id">): Promise<
   return res.json();
 }
 
-export async function apiUpdate(id: number, data: Partial<Omit<Product, "id" | "user_id">>): Promise<Product> {
+export async function apiUpdate(tableId: string, id: number, data: Record<string, unknown>): Promise<Record<string, unknown>> {
   const token = await getToken();
-  const res = await fetch(`/api/products/${id}`, {
+  const res = await fetch(`/api/${tableId}/${id}`, {
     method: "PUT",
     headers: headers(token!),
     body: JSON.stringify(data),
@@ -61,15 +72,15 @@ export async function apiUpdate(id: number, data: Partial<Omit<Product, "id" | "
   return res.json();
 }
 
-export async function apiRemove(id: number): Promise<void> {
+export async function apiRemove(tableId: string, id: number): Promise<void> {
   const token = await getToken();
-  const res = await fetch(`/api/products/${id}`, { method: "DELETE", headers: headers(token!) });
+  const res = await fetch(`/api/${tableId}/${id}`, { method: "DELETE", headers: headers(token!) });
   if (!res.ok) throw new Error((await res.json()).error);
 }
 
-export async function apiSeed(): Promise<Product[]> {
+export async function apiSeed(tableId: string): Promise<Record<string, unknown>[]> {
   const token = await getToken();
-  const res = await fetch("/api/products/seed", {
+  const res = await fetch(`/api/${tableId}/seed`, {
     method: "POST",
     headers: headers(token!),
   });

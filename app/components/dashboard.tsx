@@ -1,313 +1,450 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { db } from "../lib/supabase-db";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLog } from "../lib/log-context";
+import { useToast } from "../lib/toast-context";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
-import type { Product, User } from "../types";
+import { appConfig, isLowStock, getTableById, getPrimaryTable, type TableConfig } from "../lib/config";
+import type { Product } from "../types";
+import Navbar from "./navbar";
 import Chat from "./chat";
+import CommandPalette from "./command-palette";
 import EditModal from "./edit-modal";
 import LogPanel from "./log-panel";
 import Spin from "./spin";
+import { BarChartView, type BarDatum } from "./charts/bar-chart";
+import { PieChartView, type PieDatum } from "./charts/pie-chart";
 
-type DashboardProps = {
-  user: User;
-};
-
-const emptyForm = { name: "", price: "", quantity: "", category: "" };
-
-const navItems = [
-  { id: "overview", label: "Overview" },
-  { id: "products", label: "Products" },
-  { id: "logs", label: "Logs" },
-];
-
-export default function DashboardView({ user }: DashboardProps) {
-  const router = useRouter();
+export default function DashboardView() {
   const { log, logs, clearLogs } = useLog();
-  const [products, setProducts] = useState<Product[]>([]);
+  const { showToast } = useToast();
+  const [activeTableId, setActiveTableId] = useState<string>(getPrimaryTable().id);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const [activeNav, setActiveNav] = useState("products");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<Record<string, string>>({});
 
-  useEffect(() => {
+  const currentTable: TableConfig = getTableById(activeTableId) ?? getPrimaryTable();
+
+  const [, startTableTransition] = useTransition();
+
+  function load(id: string) {
     let cancelled = false;
-    apiGetAll()
+    apiGetAll(id)
       .then((data) => {
-        if (!cancelled) { setProducts(data); setLoading(false); log("API", `GET /api/products -> ${data.length} products`, true); }
+        if (cancelled) return;
+        setItems(data as Record<string, unknown>[]);
+        setLoading(false);
+        log("API", `GET /api/${id} -> ${data.length} items`, true);
       })
       .catch((error: unknown) => {
-        if (!cancelled) { log("API", `GET /api/products -> ${error instanceof Error ? error.message : "Error"}`, false, true); setLoading(false); }
+        if (cancelled) return;
+        log("API", `GET /api/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+        setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [log]);
+  }
+
+  useEffect(() => {
+    startTableTransition(() => {
+      setLoading(true);
+      setItems([]);
+    });
+    return load(activeTableId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTableId]);
+
+  function switchTable(id: string) {
+    if (id === activeTableId) return;
+    setSearch("");
+    setFilter("all");
+    setForm({});
+    setShowForm(false);
+    setEditItem(null);
+    setActiveTableId(id);
+    log("UI", `Switched to table: ${id}`);
+  }
 
   async function add() {
-    if (!form.name || !form.price || !form.quantity) return;
+    const required = currentTable.fields.filter((f) => f.required).map((f) => f.key);
+    if (required.some((k) => !form[k])) {
+      showToast("Fill all required fields", "error");
+      return;
+    }
     setAdding(true);
-    log("API", "POST /api/products");
+    log("API", `POST /api/${currentTable.id}`);
     try {
-      const row = await apiInsert({ name: form.name, price: Number(form.price), quantity: Number(form.quantity), category: form.category || "General" });
-      log("API", `POST /api/products -> id:${row.id}`, true);
-      setProducts((prev) => [...prev, row]);
-      setForm(emptyForm);
+      const payload: Record<string, unknown> = {};
+      for (const f of currentTable.fields) {
+        const v = form[f.key];
+        if (v === undefined || v === "") continue;
+        payload[f.key] = f.type === "number" ? Number(v) : v;
+      }
+      const row = (await apiInsert(currentTable.id, payload)) as Record<string, unknown>;
+      log("API", `POST /api/${currentTable.id} -> id:${row.id}`, true);
+      setItems((prev) => [...prev, row]);
+      setForm({});
       setShowForm(false);
+      showToast(`Created ${currentTable.entity.name} "${row.name}"`, "success");
     } catch (error) {
-      log("API", `POST /api/products -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      log("API", `POST /api/${currentTable.id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      showToast("Could not create item", "error");
     } finally { setAdding(false); }
   }
 
   async function save(id: number, data: Partial<Omit<Product, "id">>) {
-    log("API", `PUT /api/products/${id}`);
+    log("API", `PUT /api/${currentTable.id}/${id}`);
     try {
-      const updated = await apiUpdate(id, data);
-      log("API", `PUT /api/products/${id} -> ok`, true);
-      setProducts((prev) => prev.map((item) => item.id === id ? updated : item));
-      setEditProduct(null);
+      const updated = (await apiUpdate(currentTable.id, id, data as Record<string, unknown>)) as Record<string, unknown>;
+      log("API", `PUT /api/${currentTable.id}/${id} -> ok`, true);
+      setItems((prev) => prev.map((item) => (Number(item.id) === id ? updated : item)));
+      setEditItem(null);
+      showToast("Updated", "success");
     } catch (error) {
-      log("API", `PUT /api/products/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      log("API", `PUT /api/${currentTable.id}/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      showToast("Could not update", "error");
     }
   }
 
   async function del(id: number) {
     setDeleting(id);
-    log("API", `DELETE /api/products/${id}`);
+    log("API", `DELETE /api/${currentTable.id}/${id}`);
     try {
-      await apiRemove(id);
-      log("API", `DELETE /api/products/${id} -> ok`, true);
-      setProducts((prev) => prev.filter((item) => item.id !== id));
+      await apiRemove(currentTable.id, id);
+      log("API", `DELETE /api/${currentTable.id}/${id} -> ok`, true);
+      setItems((prev) => prev.filter((item) => Number(item.id) !== id));
+      showToast("Deleted", "success");
     } catch (error) {
-      log("API", `DELETE /api/products/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      log("API", `DELETE /api/${currentTable.id}/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      showToast("Could not delete", "error");
     } finally { setDeleting(null); }
   }
 
   async function seedSamples() {
     setSeeding(true);
-    log("API", "POST /api/products/seed");
+    log("API", `POST /api/${currentTable.id}/seed`);
     try {
-      const rows = await apiSeed();
-      log("API", `POST /api/products/seed -> ${rows.length} products`, true);
-      setProducts((prev) => [...prev, ...rows]);
+      const rows = (await apiSeed(currentTable.id)) as Record<string, unknown>[];
+      log("API", `POST /api/${currentTable.id}/seed -> ${rows.length} items`, true);
+      setItems((prev) => [...prev, ...rows]);
+      showToast(`Loaded ${rows.length} sample ${currentTable.entity.plural}`, "success");
     } catch (error) {
-      log("API", `POST /api/products/seed -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      log("API", `POST /api/${currentTable.id}/seed -> ${error instanceof Error ? error.message : "Error"}`, false, true);
+      showToast("Could not load samples", "error");
     } finally { setSeeding(false); }
   }
 
-  async function logout() {
-    log("AUTH", "supabase.auth.signOut()");
-    await db.signOut();
-    log("AUTH", "Session cleared", true);
-    router.push("/");
-  }
-
-  const totalVal = products.reduce((acc, p) => acc + p.price * p.quantity, 0);
-  const lowCount = products.filter((p) => p.quantity < 10).length;
-  const okCount = products.filter((p) => p.quantity >= 10).length;
-  const filtered = products.filter((p) => {
-    const ms = p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
-    const mf = filter === "all" || (filter === "low" && p.quantity < 10) || (filter === "ok" && p.quantity >= 10);
-    return ms && mf;
-  });
+  // ---- Derived stats + chart data ----
+  const lowCount = items.filter((it) => isLowStock(it, currentTable)).length;
+  const okCount = items.length - lowCount;
+  const filtered = useMemo(() => items.filter((p) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || currentTable.searchFields.some((f) => String(p[f] ?? "").toLowerCase().includes(q));
+    const matchFilter = filter === "all"
+      || (filter === "low" && isLowStock(p, currentTable))
+      || (filter === "ok" && !isLowStock(p, currentTable));
+    return matchSearch && matchFilter;
+  }), [items, search, filter, currentTable]);
 
   const stats = [
-    { label: "Total Products", value: products.length },
-    { label: "Total Value", value: `INR ${totalVal.toLocaleString()}`, accent: true },
-    { label: "Low Stock", value: lowCount, danger: lowCount > 0 },
-    { label: "In Stock", value: okCount },
+    { label: `Total ${currentTable.entity.title}`, value: String(items.length) },
+    { label: "Low Stock", value: String(lowCount) },
+    { label: "In Stock", value: String(okCount) },
+    { label: "Filtered", value: String(filtered.length) },
   ];
 
-  function handleNav(id: string) {
-    setActiveNav(id);
-    if (id === "logs") { setShowLogs((prev) => !prev); return; }
-    setShowLogs(false);
-    if (id === "overview") setActiveNav("products");
-  }
+  // Chart data: distribution by first non-name non-numeric field (categorical)
+  const categoricalField = currentTable.fields.find((f) => f.key !== "name" && f.type !== "number");
+  const categoryChart: BarDatum[] = useMemo(() => {
+    if (!categoricalField) return [];
+    const counts = new Map<string, number>();
+    for (const it of items) {
+      const key = String(it[categoricalField.key] ?? "—");
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [items, categoricalField]);
 
+  const statusPie: PieDatum[] = useMemo(() => [
+    { label: "In stock", value: okCount },
+    { label: "Low stock", value: lowCount },
+  ], [okCount, lowCount]);
+
+  // ---- Render ----
   return (
-    <div className="min-h-screen flex">
-      <aside className={`fixed inset-y-0 left-0 z-30 w-56 bg-surface border-r border-border flex flex-col transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:relative`}>
-        <div className="flex items-center gap-2 h-14 px-5 border-b border-border">
-          <span className="text-accent text-lg">&#9632;</span>
-          <span className="text-fg font-semibold text-sm">Inventory</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNav(item.id)}
-              className={`text-left text-sm rounded-lg px-3 py-2 transition-colors ${
-                activeNav === item.id && item.id !== "logs"
-                  ? "bg-accent/10 text-accent font-medium"
-                  : "text-muted hover:text-fg hover:bg-border/50"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="px-4 py-3 border-t border-border">
-          <div className="text-xs text-muted mb-2 truncate">{user.email}</div>
-          <button onClick={logout} className="w-full text-xs text-muted hover:text-danger border border-border hover:border-danger rounded-lg py-1.5 transition-colors">
-            Sign Out
-          </button>
-        </div>
-        <button onClick={() => setSidebarOpen(false)} className="lg:hidden absolute top-3 right-3 text-muted hover:text-fg">&times;</button>
-      </aside>
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
 
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      <div className="flex-1 flex">
+        <aside className="hidden lg:flex w-56 flex-col border-r border-border bg-surface/40">
+          {appConfig.tables.length > 1 && (
+            <>
+              <div className="px-4 py-3 border-b border-border">
+                <p className="text-muted text-[10px] uppercase tracking-wider font-semibold mb-2">Tables</p>
+                <div className="flex flex-col gap-0.5">
+                  {appConfig.tables.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => switchTable(t.id)}
+                      className={`text-left text-sm rounded-md px-2.5 py-1.5 transition-colors flex items-center justify-between ${
+                        t.id === activeTableId ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"
+                      }`}
+                    >
+                      <span className="truncate">{t.entity.title}</span>
+                      <span className="text-[10px] font-mono opacity-70">{t.id}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="border-t border-border" />
+            </>
+          )}
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-10 bg-bg/80 backdrop-blur-lg border-b border-border">
-          <div className="flex items-center justify-between px-4 sm:px-6 h-14">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted hover:text-fg text-lg">&#9776;</button>
-              <span className="text-fg font-medium text-sm hidden sm:inline">Products</span>
-              <span className="text-muted text-[10px] font-mono hidden sm:inline">{products.length} items</span>
+          <div className="px-4 py-4 border-b border-border">
+            <div className="flex items-center gap-2 text-fg text-sm font-semibold">
+              <span className="text-accent">&#9632;</span>
+              <span>{currentTable.entity.title}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <p className="text-muted text-[10px] font-mono mt-1">{items.length} {currentTable.entity.plural}</p>
+          </div>
+          <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
+            <button
+              onClick={() => { setFilter("all"); log("UI", "Filter: all"); }}
+              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "all" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => { setFilter("low"); log("UI", "Filter: low"); }}
+              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "low" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
+            >
+              Low stock
+            </button>
+            <button
+              onClick={() => { setFilter("ok"); log("UI", "Filter: ok"); }}
+              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "ok" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
+            >
+              In stock
+            </button>
+            <div className="border-t border-border my-2" />
+            <button
+              onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
+              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${showLogs ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
+            >
+              {showLogs ? "Hide logs" : "Show logs"}
+            </button>
+          </nav>
+        </aside>
+
+        <main className={`flex-1 min-w-0 transition-all duration-200 ${showLogs ? "lg:max-w-[calc(100%-300px)]" : ""}`}>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+              {stats.map((s, i) => (
+                <div
+                  key={s.label}
+                  className="bg-surface border border-border rounded-lg px-4 py-3.5 animate-fadeInUp"
+                  style={{ animationDelay: `${i * 0.04}s` }}
+                >
+                  <p className="text-muted text-[10px] sm:text-xs uppercase tracking-wider mb-1.5 font-medium">{s.label}</p>
+                  <p className="text-lg sm:text-xl font-semibold text-fg">{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {!loading && items.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                {categoricalField && categoryChart.length > 0 && (
+                  <div className="bg-surface border border-border rounded-lg p-4 animate-fadeInUp" style={{ animationDelay: "0.16s" }}>
+                    <p className="text-muted text-[10px] uppercase tracking-wider font-medium mb-2">
+                      By {categoricalField.label}
+                    </p>
+                    <BarChartView data={categoryChart} height={200} />
+                  </div>
+                )}
+                <div className="bg-surface border border-border rounded-lg p-4 animate-fadeInUp" style={{ animationDelay: "0.2s" }}>
+                  <p className="text-muted text-[10px] uppercase tracking-wider font-medium mb-2">Stock Status</p>
+                  <PieChartView data={statusPie} height={200} />
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2.5 mb-4 items-stretch sm:items-center">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs pointer-events-none">&#x1F50D;</span>
+                <input
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); log("UI", `Search: "${e.target.value}"`); }}
+                  placeholder={`Search ${currentTable.entity.plural}...`}
+                  className="w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-fg text-sm outline-none focus:border-muted transition-colors"
+                />
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => { setFilter("all"); log("UI", "Filter: all"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "all" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>All</button>
+                <button onClick={() => { setFilter("low"); log("UI", "Filter: low"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "low" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>Low</button>
+                <button onClick={() => { setFilter("ok"); log("UI", "Filter: ok"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "ok" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>OK</button>
+              </div>
               <button
                 onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
-                className={`text-xs rounded-lg px-3 py-1.5 border transition-colors ${showLogs ? "bg-accent text-bg border-accent" : "text-muted border-border hover:text-fg hover:border-muted"}`}
+                className={`lg:hidden text-xs rounded-md px-2.5 py-2 border transition-colors ${showLogs ? "bg-accent/10 text-accent border-accent/30" : "text-muted border-border hover:text-fg hover:border-muted"}`}
               >
                 Logs
               </button>
-              <span className="text-muted text-xs hidden sm:inline">{user.email}</span>
+              <button
+                onClick={() => setShowForm((prev) => !prev)}
+                className={`text-sm font-medium rounded-lg px-3.5 py-2 transition-colors whitespace-nowrap ${showForm ? "border border-border text-muted bg-surface hover:text-fg" : "bg-accent hover:bg-accent-hover text-bg"}`}
+              >
+                {showForm ? "Cancel" : `+ Add ${currentTable.entity.name}`}
+              </button>
             </div>
-          </div>
-        </header>
 
-        <div className="flex-1 flex">
-          <main className={`flex-1 min-w-0 transition-all duration-200 ${showLogs ? "lg:max-w-[calc(100%-280px)]" : ""}`}>
-            <div className="px-4 sm:px-6 py-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 animate-fadeIn">
-                {stats.map((s, i) => (
-                  <div key={s.label} className={`bg-surface border border-border rounded-xl px-4 sm:px-5 py-4 animate-fadeInUp delay-${i + 1}`}>
-                    <p className="text-muted text-[10px] sm:text-xs uppercase tracking-wider mb-1.5 font-medium">{s.label}</p>
-                    <p className={`text-xl sm:text-2xl font-semibold ${s.accent ? "text-accent" : s.danger ? "text-danger" : "text-fg"}`}>{s.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 mb-5 items-stretch sm:items-center animate-fadeInUp delay-3">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm pointer-events-none">&#x1F50D;</span>
-                  <input value={search} onChange={(e) => { setSearch(e.target.value); log("UI", `Search: "${e.target.value}"`); }} placeholder="Search products or category..." className="w-full bg-surface border border-border rounded-xl pl-9 pr-3.5 py-2.5 text-fg text-sm outline-none focus:border-muted transition-colors" />
-                </div>
-                <div className="flex gap-1.5">
-                  {([["all", "All"], ["low", "Low"], ["ok", "OK"]] as const).map(([v, l]) => (
-                    <button key={v} onClick={() => { setFilter(v); log("UI", `Filter: ${l}`); }} className={`text-xs sm:text-sm rounded-lg px-3.5 py-2 border transition-colors ${filter === v ? "bg-accent text-bg border-accent font-medium" : "bg-transparent text-muted border-border hover:border-muted hover:text-subtle"}`}>{l}</button>
-                  ))}
-                </div>
-                <button onClick={() => setShowForm((prev) => !prev)} className={`text-sm font-medium rounded-xl px-4 py-2.5 transition-colors whitespace-nowrap ${showForm ? "border border-border text-muted bg-surface" : "bg-accent hover:bg-accent-hover text-bg"}`}>
-                  {showForm ? "Cancel" : "+ Add"}
-                </button>
-              </div>
-
-              {showForm && (
-                <div className="bg-surface border border-border rounded-xl p-4 sm:p-5 mb-6 animate-fadeIn">
-                  <p className="text-muted text-[10px] font-mono mb-3">POST /api/products &rarr; supabase.from(&apos;products&apos;).insert(body)</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                    {([["Name", "name", "text"], ["Price", "price", "number"], ["Qty", "quantity", "number"], ["Category", "category", "text"]] as const).map(([l, k, t]) => (
-                      <div key={k}>
-                        <label className="text-muted text-[10px] uppercase block mb-1.5 font-medium">{l}</label>
-                        <input type={t} value={form[k]} onChange={(e) => setForm((prev) => ({ ...prev, [k]: e.target.value }))} className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-fg text-sm outline-none focus:border-muted transition-colors" />
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={add} disabled={adding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-semibold rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
-                    {adding ? <><Spin s={11} /><span>Inserting...</span></> : "Save to Database"}
-                  </button>
-                </div>
-              )}
-
-              {(search || filter !== "all") && (
-                <p className="text-muted text-xs mb-4 animate-fadeIn">
-                  Showing {filtered.length} of {products.length} products
-                  {search && <> matching &ldquo;<span className="text-subtle">{search}</span>&rdquo;</>}
-                  {filter !== "all" && <> &mdash; <span className="text-subtle">{filter === "low" ? "Low Stock" : "In Stock"}</span></>}
-                </p>
-              )}
-
-              {loading ? (
-                <div className="text-center py-20 text-muted animate-fadeIn">
-                  <div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-xs font-mono">GET /api/products</p>
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="text-center py-16 border border-dashed border-border rounded-2xl animate-fadeIn">
-                  <p className="text-2xl mb-2 text-muted">&#x2205;</p>
-                  <p className="text-sm text-muted mb-4">{products.length === 0 ? "No products yet." : "No products match your search."}</p>
-                  {products.length === 0 && (
-                    <button onClick={seedSamples} disabled={seeding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors">
-                      {seeding ? "Loading samples..." : "Load sample products"}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="animate-fadeIn space-y-1.5">
-                  {filtered.map((product, i) => (
-                    <div
-                      key={product.id}
-                      className={`animate-slideInLeft flex items-center gap-3 sm:gap-4 bg-surface border border-border rounded-xl px-4 sm:px-5 py-3.5 hover:border-muted transition-all duration-200 hover:translate-x-0.5 ${deleting === product.id ? "opacity-40" : ""}`}
-                      style={{ animationDelay: `${Math.min(i * 0.03, 0.3)}s` }}
-                    >
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${product.quantity < 10 ? "bg-danger" : product.quantity < 25 ? "bg-warning" : "bg-accent"}`} />
-                      <span className="text-muted text-[10px] font-mono w-8 flex-shrink-0">#{product.id}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-fg text-sm font-medium truncate">{product.name}</span>
-                          {product.quantity < 10 && <span className="text-[10px] font-semibold text-danger bg-low-bg border border-low-border rounded px-1.5 py-0.5 flex-shrink-0">LOW</span>}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
-                          <span>{product.category}</span>
-                          <span>&middot;</span>
-                          <span>{product.quantity} units</span>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-fg text-sm font-semibold">INR {Number(product.price).toLocaleString()}</p>
-                      </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <button onClick={() => { setEditProduct(product); log("UI", `Edit modal opened for "${product.name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-lg px-3 py-1.5 text-xs transition-colors">
-                          Edit
-                        </button>
-                        <button onClick={() => del(product.id)} disabled={deleting === product.id} className="border border-border text-muted hover:text-danger hover:border-danger rounded-lg px-3 py-1.5 text-xs transition-colors flex items-center gap-1">
-                          {deleting === product.id ? <><Spin s={10} /><span>...</span></> : "Delete"}
-                        </button>
-                      </div>
+            {showForm && (
+              <div className="bg-surface border border-border rounded-lg p-4 mb-4 animate-fadeIn">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
+                  {currentTable.fields.map((f) => (
+                    <div key={f.key}>
+                      <label className="text-muted text-[10px] uppercase block mb-1.5 font-medium">
+                        {f.label}{f.required && <span className="text-danger ml-0.5">*</span>}
+                      </label>
+                      <input
+                        type={f.type === "number" ? "number" : "text"}
+                        value={form[f.key] ?? ""}
+                        placeholder={f.placeholder}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        className="w-full bg-bg border border-border rounded-md px-2.5 py-1.5 text-fg text-sm outline-none focus:border-muted transition-colors"
+                      />
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </main>
+                <button onClick={add} disabled={adding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-medium rounded-md px-3.5 py-1.5 transition-colors flex items-center gap-2">
+                  {adding ? <><Spin s={10} /><span>Saving...</span></> : "Save"}
+                </button>
+              </div>
+            )}
 
-          {showLogs && (
-            <div className="hidden lg:block w-[280px] border-l border-border animate-slideInRight">
-              <LogPanel logs={logs} onClear={clearLogs} />
-            </div>
-          )}
-        </div>
+            {(search || filter !== "all") && (
+              <p className="text-muted text-xs mb-3">
+                Showing {filtered.length} of {items.length} {currentTable.entity.plural}
+              </p>
+            )}
+
+            {loading ? (
+              <div className="text-center py-16 text-muted">
+                <div className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-xs font-mono">GET /api/{currentTable.id}</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-border rounded-lg">
+                <p className="text-fg text-sm mb-1">
+                  {items.length === 0 ? `No ${currentTable.entity.plural} yet` : `No matches`}
+                </p>
+                <p className="text-muted text-xs mb-4">
+                  {items.length === 0 ? `Add your first ${currentTable.entity.name} or load the sample set.` : `Try a different search or filter.`}
+                </p>
+                {items.length === 0 && (
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <button onClick={seedSamples} disabled={seeding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-medium rounded-md px-3.5 py-2 transition-colors">
+                      {seeding ? "Loading..." : `Load sample ${currentTable.entity.plural}`}
+                    </button>
+                    <button onClick={() => setShowForm(true)} className="border border-border text-muted hover:text-fg hover:border-muted text-sm rounded-md px-3.5 py-2 transition-colors">
+                      Add manually
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {filtered.map((item, i) => {
+                  const id = Number(item.id);
+                  const name = String(item.name ?? `#${id}`);
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-3 sm:gap-4 bg-surface border border-border rounded-lg px-4 py-3 hover:border-muted transition-colors animate-fadeIn"
+                      style={{ animationDelay: `${Math.min(i * 0.02, 0.2)}s` }}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLowStock(item, currentTable) ? "bg-danger" : "bg-accent"}`} />
+                      <span className="text-muted text-[10px] font-mono w-8 flex-shrink-0">#{id}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-fg text-sm truncate">{name}</span>
+                          {isLowStock(item, currentTable) && (
+                            <span className="text-[9px] font-semibold text-danger bg-low-bg border border-low-border rounded px-1.5 py-0.5 flex-shrink-0">LOW</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
+                          {currentTable.fields.filter((f) => f.key !== "name").slice(0, 3).map((f) => (
+                            <span key={f.key} className="truncate">
+                              {item[f.key] !== undefined ? `${f.label}: ${item[f.key]}` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <button onClick={() => { setEditItem(item); log("UI", `Edit modal opened for "${name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => del(id)} disabled={deleting === id} className="border border-border text-muted hover:text-danger hover:border-danger rounded-md px-2.5 py-1 text-xs transition-colors flex items-center gap-1">
+                          {deleting === id ? <><Spin s={9} /></> : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </main>
+
+        {showLogs && (
+          <div className="hidden lg:block w-[300px] border-l border-border animate-slideInRight">
+            <LogPanel logs={logs} onClear={clearLogs} />
+          </div>
+        )}
       </div>
 
-      {editProduct && <EditModal product={editProduct} onSave={save} onClose={() => setEditProduct(null)} />}
+      {editItem && (
+        <EditModal
+          item={editItem}
+          table={currentTable}
+          onSave={save}
+          onClose={() => setEditItem(null)}
+        />
+      )}
 
-      <button onClick={() => { setShowChat((prev) => !prev); log("UI", showChat ? "Chat closed" : "AI Agent opened"); }} className={`fixed bottom-5 right-5 w-11 h-11 rounded-full border text-xs font-semibold transition-all duration-200 z-50 flex items-center justify-center shadow-lg hover:scale-105 ${showChat ? "bg-surface border-border text-muted" : "bg-accent hover:bg-accent-hover border-accent text-bg shadow-accent/20"}`}>
+      <button
+        onClick={() => { setShowChat((prev) => !prev); log("UI", showChat ? "Chat closed" : "AI Agent opened"); }}
+        className={`fixed bottom-5 right-5 w-11 h-11 rounded-full border text-xs font-semibold transition-all z-50 flex items-center justify-center shadow-lg hover:scale-105 ${showChat ? "bg-surface border-border text-muted" : "bg-accent hover:bg-accent-hover border-accent text-bg"}`}
+      >
         {showChat ? "\u00D7" : "AI"}
       </button>
 
-      {showChat && <Chat products={products} onProductsChange={setProducts} log={log} onClose={() => setShowChat(false)} />}
+      {showChat && (
+        <Chat
+          items={items as Product[]}
+          table={currentTable}
+          onItemsChange={(next) => setItems(next as Record<string, unknown>[])}
+          log={log}
+          onClose={() => setShowChat(false)}
+        />
+      )}
+
+      <CommandPalette
+        items={items as Product[]}
+        table={currentTable}
+        onAdd={() => setShowForm(true)}
+        onAI={() => setShowChat((s) => !s)}
+      />
     </div>
   );
 }
