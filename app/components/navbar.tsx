@@ -7,6 +7,7 @@ import { getSupabase } from "../lib/supabase-client";
 import { db } from "../lib/supabase-db";
 import { useToast } from "../lib/toast-context";
 import { appConfig } from "../lib/config";
+import { RoleBadge } from "./role";
 import type { User } from "../types";
 
 export default function Navbar() {
@@ -66,6 +67,7 @@ export default function Navbar() {
           {!loading && user ? (
             <>
               <span className="text-muted text-xs hidden md:inline mr-1">{user.email}</span>
+              {user.role && <RoleBadge role={user.role} size="xs" />}
               <button
                 onClick={logout}
                 className="text-xs text-muted hover:text-danger border border-border hover:border-danger rounded-md px-2.5 py-1.5 transition-colors"

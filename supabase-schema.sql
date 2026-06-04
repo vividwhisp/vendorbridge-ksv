@@ -31,6 +31,71 @@ create table if not exists products (
   created_at timestamp with time zone not null default now()
 );
 
+-- =============================================================
+--  User profiles + RBAC
+-- =============================================================
+--  Every auth.users row gets a corresponding profiles row with a
+--  `role`. Sign-ups default to 'user'. Promote a user to 'admin'
+--  with a manual UPDATE — never expose that to the client.
+-- =============================================================
+
+create table if not exists profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text not null default 'user' check (role in ('admin', 'user')),
+  created_at timestamp with time zone not null default now()
+);
+
+alter table profiles enable row level security;
+
+create policy "Users can read own profile"
+on profiles for select
+using (auth.uid() = user_id);
+
+-- The trigger below handles inserts (so we never need an INSERT
+-- policy). Updates are restricted to admins via a separate policy.
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (user_id, role)
+  values (new.id, 'user')
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
+-- Admin-only UPDATE policy. Replace <admin-user-id> with your
+-- actual auth.users.id to bootstrap the first admin. The trigger
+-- default is always 'user'.
+-- create policy "Admins can update profiles"
+-- on profiles for update
+-- using (
+--   exists (
+--     select 1 from public.profiles p
+--     where p.user_id = auth.uid() and p.role = 'admin'
+--   )
+-- );
+
+-- =============================================================
+--  Bootstrap admin (demo creds)
+-- =============================================================
+--  After signing up with kori@dev.com / 1234, run this once to
+--  promote that account to admin so the demo can use destructive
+--  actions. Replace the email if you used a different one.
+-- =============================================================
+-- update profiles
+-- set role = 'admin'
+-- where user_id = (select id from auth.users where email = 'kori@dev.com');
+
 -- If you already ran the previous version of this schema, add the
 -- status column with this one-liner instead of re-creating the table:
 --   alter table products add column status text not null default 'Active';
@@ -58,6 +123,50 @@ using (auth.uid() = user_id);
 -- (insert / update / delete events stream to the browser).
 -- Run this once per table you want to sync live.
 alter publication supabase_realtime add table products;
+
+
+-- =============================================================
+--  File uploads — single shared "uploads" bucket.
+--  Run this in the Supabase SQL editor AFTER creating the
+--  bucket (Storage -> New bucket -> name: "uploads" -> public).
+--  The path convention is <user_id>/<table_id>/<file> so the
+--  RLS policies below scope every operation to the owner.
+-- =============================================================
+--
+-- insert into storage.buckets (id, name, public)
+-- values ('uploads', 'uploads', true)
+-- on conflict (id) do nothing;
+--
+-- create policy "Users can upload to own folder"
+-- on storage.objects for insert
+-- with check (
+--   bucket_id = 'uploads'
+--   and auth.uid()::text = (storage.foldername(name))[1]
+-- );
+--
+-- create policy "Users can update own uploads"
+-- on storage.objects for update
+-- using (
+--   bucket_id = 'uploads'
+--   and auth.uid()::text = (storage.foldername(name))[1]
+-- );
+--
+-- create policy "Users can delete own uploads"
+-- on storage.objects for delete
+-- using (
+--   bucket_id = 'uploads'
+--   and auth.uid()::text = (storage.foldername(name))[1]
+-- );
+--
+-- Public reads are automatic because the bucket is public. To
+-- restrict reads to owners, add:
+--   create policy "Users can read own uploads"
+--   on storage.objects for select
+--   using (
+--     bucket_id = 'uploads'
+--     and auth.uid()::text = (storage.foldername(name))[1]
+--   );
+-- and toggle the bucket to private in the Supabase dashboard.
 
 
 -- =============================================================

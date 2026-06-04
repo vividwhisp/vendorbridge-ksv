@@ -15,7 +15,7 @@
 export type FieldDef = {
   key: string;
   label: string;
-  type: "text" | "number" | "textarea" | "select";
+  type: "text" | "number" | "textarea" | "select" | "file";
   required?: boolean;
   placeholder?: string;
 };
@@ -61,10 +61,11 @@ const PRIMARY_TABLE: TableConfig = {
     title: "Items",
   },
   fields: [
-    { key: "name",     label: "Name",     type: "text",   required: true, placeholder: "e.g. iPhone 15" },
-    { key: "price",    label: "Price",    type: "number", required: true, placeholder: "0" },
-    { key: "quantity", label: "Quantity", type: "number", required: true, placeholder: "0" },
-    { key: "category", label: "Category", type: "text",                   placeholder: "General" },
+    { key: "name",      label: "Name",      type: "text",   required: true, placeholder: "e.g. iPhone 15" },
+    { key: "price",     label: "Price",     type: "number", required: true, placeholder: "0" },
+    { key: "quantity",  label: "Quantity",  type: "number", required: true, placeholder: "0" },
+    { key: "category",  label: "Category",  type: "text",                   placeholder: "General" },
+    { key: "image_url", label: "Image",     type: "file" },
   ],
   searchFields: ["name", "category"],
   lowStockField: "quantity",
@@ -105,7 +106,7 @@ export const appConfig = {
   description: "Manage any data with search, filters, and an AI agent.",
 
   // Accent: drives the entire theme. See getAccentPalette() below.
-  accent: "green" as ThemeName,
+  accent: "blue" as ThemeName,
 
   // ---------- Landing page copy ----------
   // Every string the public landing page displays lives here.

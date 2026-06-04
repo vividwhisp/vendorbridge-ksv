@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiUpdate, apiRemove, apiInsert, apiGetAll } from "../lib/api-helper";
 import { appConfig, type TableConfig } from "../lib/config";
 import { hasWorkflow } from "../lib/workflow";
+import { canDelete, canEdit, type Role } from "../lib/rbac";
 import type { LogFn, Row } from "../types";
 
 type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
@@ -35,6 +36,7 @@ type ChatProps = {
   onItemsChange: (items: Row[]) => void;
   log: LogFn;
   onClose: () => void;
+  role?: Role;
 };
 
 const actionLabels: Record<string, string> = {
@@ -84,7 +86,7 @@ RULES:
 - Match ${entityName} names flexibly (case-insensitive, partial match).`;
 }
 
-export default function Chat({ items, table, onItemsChange, log, onClose }: ChatProps) {
+export default function Chat({ items, table, onItemsChange, log, onClose, role = "user" }: ChatProps) {
   const [msgs, setMsgs] = useState<Message[]>([
     { role: "ai", text: appConfig.ai.welcome },
   ]);
@@ -138,6 +140,14 @@ export default function Chat({ items, table, onItemsChange, log, onClose }: Chat
 
   async function executeActions(actions: AgentAction[]) {
     for (const act of actions) {
+      if (!canEdit(role) && act.action !== "query") {
+        log("AGENT", `Skipped ${act.action}: role "${role}" lacks edit permission`);
+        continue;
+      }
+      if (!canDelete(role) && act.action === "delete_item") {
+        log("AGENT", `Skipped delete_item: role "${role}" lacks delete permission`);
+        continue;
+      }
       if (act.action === "update_stock" && act.productId && typeof act.newQuantity === "number") {
         log("AGENT", `UPDATE ${table.tableName ?? table.id} SET ${table.lowStockField ?? "quantity"}=${act.newQuantity} WHERE id=${act.productId}`);
         log("API", `PUT /api/${table.id}/${act.productId}`);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, handleApiError, resolveTableName } from "../../../lib/api-helper";
+import { getUserFromToken, handleApiError, requireRole, resolveTableName } from "../../../lib/api-helper";
 import { getTableById } from "../../../lib/config";
 
 export async function POST(
@@ -9,6 +9,7 @@ export async function POST(
   try {
     const { table: tableId } = await params;
     const tableName = resolveTableName(tableId);
+    requireRole(request, "manage");
     const table = getTableById(tableId);
     const { user, supabase } = await getUserFromToken(request);
 

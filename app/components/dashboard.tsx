@@ -17,6 +17,9 @@ import LogPanel from "./log-panel";
 import Spin from "./spin";
 import { BarChartView, type BarDatum } from "./charts/bar-chart";
 import { PieChartView, type PieDatum } from "./charts/pie-chart";
+import { FileUpload, ImagePreview } from "./upload";
+import { Can } from "./role";
+import { useUserRole } from "../lib/role-context";
 
 export default function DashboardView() {
   const { log, logs, clearLogs } = useLog();
@@ -38,6 +41,7 @@ export default function DashboardView() {
 
   const currentTable: TableConfig = getTableById(activeTableId) ?? getPrimaryTable();
   const useWorkflow = hasWorkflow(currentTable);
+  const { role: currentRole } = useUserRole();
 
   const [, startTableTransition] = useTransition();
 
@@ -379,29 +383,39 @@ export default function DashboardView() {
               >
                 Logs
               </button>
-              <button
-                onClick={() => setShowForm((prev) => !prev)}
-                className={`text-sm font-medium rounded-lg px-3.5 py-2 transition-colors whitespace-nowrap ${showForm ? "border border-border text-muted bg-surface hover:text-fg" : "bg-accent hover:bg-accent-hover text-bg"}`}
-              >
-                {showForm ? "Cancel" : `+ Add ${currentTable.entity.name}`}
-              </button>
+              <Can action="edit">
+                <button
+                  onClick={() => setShowForm((prev) => !prev)}
+                  className={`text-sm font-medium rounded-lg px-3.5 py-2 transition-colors whitespace-nowrap ${showForm ? "border border-border text-muted bg-surface hover:text-fg" : "bg-accent hover:bg-accent-hover text-bg"}`}
+                >
+                  {showForm ? "Cancel" : `+ Add ${currentTable.entity.name}`}
+                </button>
+              </Can>
             </div>
 
             {showForm && (
               <div className="bg-surface border border-border rounded-lg p-4 mb-4 animate-fadeIn">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
                   {currentTable.fields.map((f) => (
-                    <div key={f.key}>
+                    <div key={f.key} className={f.type === "file" ? "col-span-2" : undefined}>
                       <label className="text-muted text-[10px] uppercase block mb-1.5 font-medium">
                         {f.label}{f.required && <span className="text-danger ml-0.5">*</span>}
                       </label>
-                      <input
-                        type={f.type === "number" ? "number" : "text"}
-                        value={form[f.key] ?? ""}
-                        placeholder={f.placeholder}
-                        onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                        className="w-full bg-bg border border-border rounded-md px-2.5 py-1.5 text-fg text-sm outline-none focus:border-muted transition-colors"
-                      />
+                      {f.type === "file" ? (
+                        <FileUpload
+                          value={form[f.key]}
+                          onChange={(url) => setForm((prev) => ({ ...prev, [f.key]: url ?? "" }))}
+                          tableId={currentTable.id}
+                        />
+                      ) : (
+                        <input
+                          type={f.type === "number" ? "number" : "text"}
+                          value={form[f.key] ?? ""}
+                          placeholder={f.placeholder}
+                          onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          className="w-full bg-bg border border-border rounded-md px-2.5 py-1.5 text-fg text-sm outline-none focus:border-muted transition-colors"
+                        />
+                      )}
                     </div>
                   ))}
                   {useWorkflow && (
@@ -448,12 +462,16 @@ export default function DashboardView() {
                 </p>
                 {items.length === 0 && (
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                    <button onClick={seedSamples} disabled={seeding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-medium rounded-md px-3.5 py-2 transition-colors">
-                      {seeding ? "Loading..." : `Load sample ${currentTable.entity.plural}`}
-                    </button>
-                    <button onClick={() => setShowForm(true)} className="border border-border text-muted hover:text-fg hover:border-muted text-sm rounded-md px-3.5 py-2 transition-colors">
-                      Add manually
-                    </button>
+                    <Can action="manage">
+                      <button onClick={seedSamples} disabled={seeding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-medium rounded-md px-3.5 py-2 transition-colors">
+                        {seeding ? "Loading..." : `Load sample ${currentTable.entity.plural}`}
+                      </button>
+                    </Can>
+                    <Can action="edit">
+                      <button onClick={() => setShowForm(true)} className="border border-border text-muted hover:text-fg hover:border-muted text-sm rounded-md px-3.5 py-2 transition-colors">
+                        Add manually
+                      </button>
+                    </Can>
                   </div>
                 )}
               </div>
@@ -463,6 +481,8 @@ export default function DashboardView() {
                   const id = Number(item.id);
                   const name = String(item.name ?? `#${id}`);
                   const state = String(item.status ?? "");
+                  const firstFile = currentTable.fields.find((f) => f.type === "file");
+                  const fileUrl = firstFile ? String(item[firstFile.key] ?? "") : "";
                   return (
                     <div
                       key={id}
@@ -470,6 +490,7 @@ export default function DashboardView() {
                       style={{ animationDelay: `${Math.min(i * 0.02, 0.2)}s` }}
                     >
                       <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLowStock(item, currentTable) ? "bg-danger" : "bg-accent"}`} />
+                      {firstFile && <ImagePreview url={fileUrl} size="sm" />}
                       <span className="text-muted text-[10px] font-mono w-8 flex-shrink-0">#{id}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -492,22 +513,28 @@ export default function DashboardView() {
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0 items-center">
                         {useWorkflow && (
-                          <StatusDropdown
-                            item={item}
-                            table={currentTable}
-                            onUpdated={(next) => {
-                              setItems((prev) =>
-                                prev.map((it) => (Number(it.id) === id ? next : it)),
-                              );
-                            }}
-                          />
+                          <Can action="edit">
+                            <StatusDropdown
+                              item={item}
+                              table={currentTable}
+                              onUpdated={(next) => {
+                                setItems((prev) =>
+                                  prev.map((it) => (Number(it.id) === id ? next : it)),
+                                );
+                              }}
+                            />
+                          </Can>
                         )}
-                        <button onClick={() => { setEditItem(item); log("UI", `Edit modal opened for "${name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
-                          Edit
-                        </button>
-                        <button onClick={() => del(id)} disabled={deleting === id} className="border border-border text-muted hover:text-danger hover:border-danger rounded-md px-2.5 py-1 text-xs transition-colors flex items-center gap-1">
-                          {deleting === id ? <><Spin s={9} /></> : "Delete"}
-                        </button>
+                        <Can action="edit">
+                          <button onClick={() => { setEditItem(item); log("UI", `Edit modal opened for "${name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
+                            Edit
+                          </button>
+                        </Can>
+                        <Can action="delete">
+                          <button onClick={() => del(id)} disabled={deleting === id} className="border border-border text-muted hover:text-danger hover:border-danger rounded-md px-2.5 py-1 text-xs transition-colors flex items-center gap-1">
+                            {deleting === id ? <><Spin s={9} /></> : "Delete"}
+                          </button>
+                        </Can>
                       </div>
                     </div>
                   );
@@ -547,6 +574,7 @@ export default function DashboardView() {
           onItemsChange={setItems}
           log={log}
           onClose={() => setShowChat(false)}
+          role={currentRole}
         />
       )}
 

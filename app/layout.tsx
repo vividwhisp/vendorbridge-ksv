@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { LogProvider } from "./lib/log-context";
 import { ToastProvider } from "./lib/toast-context";
+import { RoleProvider } from "./lib/role-context";
 import { appConfig, getAccentPalette } from "./lib/config";
 
 const geistSans = Geist({
@@ -62,7 +63,9 @@ export default function RootLayout({
           style={{ background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(var(--accent-rgb), 0.4), transparent 70%)" }}
         />
         <ToastProvider>
-          <LogProvider>{children}</LogProvider>
+          <LogProvider>
+            <RoleProvider>{children}</RoleProvider>
+          </LogProvider>
         </ToastProvider>
       </body>
     </html>

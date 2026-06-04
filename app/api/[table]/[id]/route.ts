@@ -3,6 +3,7 @@ import {
   getUserFromToken,
   handleApiError,
   prepareUpdateStatus,
+  requireRole,
   resolveTableName,
 } from "../../../lib/api-helper";
 
@@ -13,6 +14,7 @@ export async function PUT(
   try {
     const { table: tableId, id } = await params;
     const tableName = resolveTableName(tableId);
+    requireRole(request, "edit");
     const { supabase } = await getUserFromToken(request);
     const body = await request.json();
 
@@ -38,6 +40,7 @@ export async function DELETE(
   try {
     const { table: tableId, id } = await params;
     const tableName = resolveTableName(tableId);
+    requireRole(request, "delete");
     const { supabase } = await getUserFromToken(request);
 
     const { error } = await supabase

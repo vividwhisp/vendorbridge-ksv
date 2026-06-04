@@ -14,14 +14,16 @@ Designed to be **adapted to any problem statement in minutes** by editing a sing
 - **Dashboard** — Auth-aware navbar, sidebar nav, vertical list, search + filters, edit modal, slide-in log panel, table picker
 - **Charts** — Auto-derived bar + pie charts (recharts) themed from the active color palette
 - **Realtime sync** — Live INSERT / UPDATE / DELETE events from Supabase stream into the dashboard across all open sessions; "LIVE" indicator in the sidebar
+- **File uploads** — Drop a field of `type: "file"` into any `TableConfig`; `FileUpload` + `ImagePreview` handle images, PDFs, and docs against a single shared Supabase Storage bucket
 - **Toast system** — React context, no extra deps
 - **Command palette** — `⌘K` / `Ctrl+K` to search items and run commands
 - **AI agent** — Floating chat widget, takes real actions on the DB via JSON actions; system prompt auto-rebuilds per active table
 - **Voice I/O** — Speech recognition + speech synthesis (Chrome/Edge)
 - **Settings / Profile pages** — Auth-guarded routes
 - **Landing page** — Public home with features, how-it-works, use cases, and footer
-- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, REALTIME, WORKFLOW, DB)
+- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, REALTIME, WORKFLOW, STORAGE, DB)
 - **Row-level security** — Per-user data isolation via Supabase RLS
+- **RBAC** — Lightweight role system (`admin` / `user`); `<Can action="…">` component and `requireRole()` helper keep checks out of components
 
 ---
 
@@ -219,9 +221,7 @@ Colors come from the active theme's `--chart-1` through `--chart-5` CSS variable
 
 To add a new chart, import a recharts component into `app/components/dashboard.tsx` and pass `palette.chart1` etc. (read via `getComputedStyle(document.body)`) as the `fill` color.
 
-## Workflow system
-
-Every `TableConfig` can declare an optional `workflow: string[]`. When set, the entire UI adapts to that lifecycle — stats, filters, badges, and the AI agent all know the states.
+## Workflow systemEvery `TableConfig` can declare an optional `workflow: string[]`. When set, the entire UI adapts to that lifecycle — stats, filters, badges, and the AI agent all know the states.
 
 ### Declaring a workflow
 
@@ -295,12 +295,190 @@ The Odoo X KSV hackathon problem statements are revealed on the spot. Use this c
 4. **Minute 25-35** — Sign up, sign in, click "Load samples" for each table, verify the dashboard. The table picker in the sidebar should switch entities cleanly; charts should render; search should work; the "LIVE" badge in the sidebar confirms realtime is connected.
 5. **Minute 35-120** — Build the differentiating features on top. Common extensions:
    - **Lifecycle / status workflow** — add `workflow: ["Draft", "In Review", "Done"]` to the `TableConfig`. The dashboard auto-gains stat cards, filter pills, status badges, an inline `<StatusDropdown>`, a `<WorkflowTimeline>` in the edit modal, and an `update_status` action in the AI agent. See the [Workflow system](#workflow-system) section.
+- **Role-based access** — wrap any button in `<Can action="edit">` and the dashboard auto-hides it for read-only users. See the [RBAC](#rbac-role-based-access) section.
    - **Detail view per row** — add `app/items/[id]/page.tsx` with a server-rendered detail page.
    - **Cross-table relations** — use a numeric `item_id` field on the second table; the AI agent already understands this.
    - **Map view** — add a `lat`/`lng` field and render with a Leaflet iframe.
-   - **File upload** — use Supabase Storage with a `file_url` text field.
+   - **File upload** — add a field with `type: "file"` to any `TableConfig`. Images, PDFs, and docs up to 10MB are handled. See the [File uploads](#file-uploads) section.
 6. **Pro tip** — keep the demo creds (`kori@dev.com` / `1234`) pre-filled on the login form so the judge can sign in instantly.
 7. **Pro tip** — change `accent` to match the problem domain in one line. Purple for collaboration, blue for finance, green for inventory, red for emergencies, orange for marketplaces.
+
+---
+
+## File uploadsAny `FieldDef` can declare `type: "file"`. When it does, the form generator renders `<FileUpload />` instead of an `<input>`. The uploaded public URL is saved into the row automatically — no extra API call needed.
+
+### Declaring a file field
+
+```ts
+{
+  id: "products",
+  fields: [
+    { key: "name",      label: "Name",     type: "text",   required: true },
+    { key: "image_url", label: "Photo",    type: "file" },
+    { key: "manual",    label: "Manual",   type: "file" },
+  ],
+}
+```
+
+The matching Postgres column must be `text` (or `text null`) since the component writes a URL string:
+
+```sql
+alter table products add column image_url text;
+alter table products add column manual text;
+```
+
+### Supported file types
+
+Defined centrally in `app/lib/storage.ts` (`STORAGE.accept`):
+
+| Category  | MIME types                                                                          |
+|-----------|-------------------------------------------------------------------------------------|
+| `image`   | `image/png`, `image/jpeg`, `image/webp`, `image/gif`, `image/svg+xml`              |
+| `pdf`     | `application/pdf`                                                                   |
+| `document`| `msword`, `docx`, `xls`, `xlsx`, `text/plain`, `text/csv`, `text/markdown`         |
+
+Anything outside the allowlist is rejected client-side with a toast and a red error label.
+
+Max size is `STORAGE.maxSizeMB` (default 10MB). Bump it in `app/lib/storage.ts` if you need larger files.
+
+### Storage path convention
+
+Files are uploaded to a single shared bucket called `uploads` with this path:
+
+```
+<user_id>/<table_id>/<timestamp>-<safe-filename>
+```
+
+Path-level RLS keeps every user scoped to their own folder — see the SQL snippet in `supabase-schema.sql`.
+
+### One-time Supabase setup
+
+1. In the Supabase dashboard: **Storage → New bucket → name: `uploads` → public**.
+2. In the SQL editor, paste the uncommented policies from the bottom of `supabase-schema.sql` (or just run them as written).
+3. The bucket is public so `<ImagePreview />` can show images without a signed-URL dance. To make it private, add the optional SELECT policy and use `getFileUrl(path, { signed: true })` (not implemented by default — hackathon-friendly is public).
+
+### Components
+
+- `app/components/upload/file-upload.tsx` — drop-in input with `useTransition` for non-blocking uploads, error display, and inline preview
+- `app/components/upload/image-preview.tsx` — clickable thumbnail for images, generic file icon for PDFs/docs; sizes `xs | sm | md`
+
+### Helpers (`app/lib/storage.ts`)
+
+- `uploadFile(file, { tableId })` → `{ ok, url, path, category }` / `{ ok: false, error }`
+- `deleteFile(path)` → `{ ok }` / `{ ok: false, error }`
+- `validateFile(file)` — used internally; export it for custom flows
+- `getFileCategory(mime)` — `"image" | "pdf" | "document" | "unknown"`
+- `isImageUrl(url)` — used by `ImagePreview` to pick the right rendering
+- `pathFromPublicUrl(url)` — reverse-helper if you need to delete a file referenced by URL
+
+### Logs
+
+Every upload emits a `STORAGE` log entry (color-coded in the dev console):
+
+```
+STORAGE  Uploading invoice.pdf (342.1KB) -> products
+STORAGE  Uploaded: abc.../products/1717...-invoice.pdf  ✓
+```
+
+Failures show the original Supabase error message verbatim.
+
+---
+
+## RBAC (role-based access)
+
+Two roles ship out of the box: `admin` and `user`. New sign-ups get `user`; promote to `admin` with a one-line SQL update. Permissions are checked via a centralized `PERMISSIONS` table — components never see role strings.
+
+### Permissions matrix
+
+| Action  | `admin` | `user` |
+|---------|---------|--------|
+| `view`  | ✓       | ✓      |
+| `edit`  | ✓       | ✓      |
+| `delete`| ✓       | ✗      |
+| `manage`| ✓       | ✗      |
+
+`manage` is reserved for global actions like "Load samples" (admin-only).
+
+### Adding a new role
+
+Three lines in `app/lib/rbac.ts`:
+
+```ts
+export const ROLES = ["admin", "user", "editor"] as const;
+
+const PERMISSIONS: Record<Role, Record<Action, boolean>> = {
+  admin:  { view: true, edit: true, delete: true, manage: true },
+  editor: { view: true, edit: true, delete: false, manage: false },
+  user:   { view: true, edit: true, delete: false, manage: false },
+};
+```
+
+No component changes — every `<Can action="…">` and `requireRole(request, "…")` call auto-adapts.
+
+### One-time SQL setup
+
+Paste the uncommented snippet in `supabase-schema.sql` into the Supabase SQL editor. It will:
+1. Create the `profiles` table with a `role` column.
+2. Create a trigger on `auth.users` that auto-inserts a `profiles` row with `role = 'user'` on every new sign-up.
+3. Enable RLS so users can only read their own profile.
+
+After the first admin signs up, run this once to promote them (the demo `kori@dev.com` is already in the SQL file as a commented snippet):
+
+```sql
+update profiles set role = 'admin'
+where user_id = (select id from auth.users where email = 'kori@dev.com');
+```
+
+### Where checks live
+
+**UI visibility** — wrap any element in `<Can action="…">` or use the `useCan("…")` hook:
+
+```tsx
+<Can action="delete">
+  <button onClick={() => del(id)}>Delete</button>
+</Can>
+```
+
+The `<RoleProvider>` is mounted in `app/layout.tsx`; it fetches `/api/me` once on mount. The role is cached in a `RoleContext` that every component can read via `useUserRole()`.
+
+**API enforcement** — every route calls `requireRole(request, action)`:
+
+```ts
+export async function POST(request: Request, { params }) {
+  requireRole(request, "edit");   // throws "Forbidden" if role lacks 'edit'
+  // ...
+}
+```
+
+`requireRole` reads the role from the `x-user-role` header that `middleware.ts` injects after validating the JWT and looking up the profile. If a user calls `/api/items` with a token that belongs to a `user` role, the response is `403 Forbidden` and the body says `Forbidden: role "user" cannot delete`.
+
+**Middleware** — `middleware.ts` (at the repo root) runs on every non-static request:
+- Validates the Supabase access token from the cookie or `Authorization` header
+- Reads the role from `profiles`
+- Attaches `x-user-role` and `x-user-id` to the downstream request
+- Redirects unauthenticated requests on protected pages (`/dashboard`, `/settings`, `/profile`) to `/login`
+- Returns `401` for unauthenticated API calls
+
+The auth checks inside each page component (`useEffect → getUser → router.push("/login")`) are still there as a UX safety net, but the actual security is now at the edge.
+
+**AI agent** — destructive actions in `app/components/chat.tsx` are skipped with a log line if the user's role lacks the permission. The agent never reaches the network.
+
+### Components & helpers
+
+| File | Purpose |
+|------|---------|
+| `app/lib/rbac.ts` | `Role`, `ROLES`, `PERMISSIONS`, `canView/canEdit/canDelete/canManage/can`, `normalizeRole`, `ROLE_HEADER` |
+| `app/lib/role-context.tsx` | `<RoleProvider>` + `useUserRole()` hook |
+| `app/components/role/can.tsx` | `<Can action>` + `useCan()` |
+| `app/components/role/role-badge.tsx` | `<RoleBadge role>` |
+| `app/api/me/route.ts` | Returns `{ id, email, role }` for the current user |
+| `middleware.ts` | Auth + role gate + header injection |
+| `app/lib/api-helper.ts` | `getRoleFromRequest`, `requireRole` (re-exported for route handlers) |
+
+### Demo behavior
+
+- `kori@dev.com` / `1234` (after running the SQL promote snippet) → sees full dashboard with Add / Edit / Delete / Seed buttons.
+- A new sign-up → sees the same dashboard minus Delete and Load samples; can still view, search, filter, open the edit modal (read-only), and chat with the AI (read-only). The API returns 403 if they try to call a destructive endpoint directly.
 
 ---
 
@@ -310,6 +488,7 @@ The Odoo X KSV hackathon problem statements are revealed on the spot. Use this c
 app/
 ├── api/
 │   ├── chat/route.ts                 # OpenRouter proxy
+│   ├── me/route.ts                   # current user + role
 │   └── [table]/                      # dynamic, per declared table
 │       ├── route.ts                  # GET / POST
 │       ├── [id]/route.ts             # PUT / DELETE

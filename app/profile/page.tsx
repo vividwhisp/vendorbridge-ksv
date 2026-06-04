@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSupabase } from "../lib/supabase-client";
 import Navbar from "../components/navbar";
+import { RoleBadge } from "../components/role";
 import type { User } from "../types";
 
 export default function ProfilePage() {
@@ -13,12 +14,21 @@ export default function ProfilePage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     getSupabase()
       .auth.getUser()
-      .then(({ data, error }) => {
-        if (error || !data.user) { router.push("/login"); }
-        else { setUser({ id: data.user.id, email: data.user.email ?? "" }); setChecking(false); }
+      .then(async ({ data, error }) => {
+        if (error || !data.user) { router.push("/login"); return; }
+        const { data: me } = await fetch("/api/me", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null) ?? {};
+        if (cancelled) return;
+        setUser({
+          id: data.user.id,
+          email: data.user.email ?? "",
+          role: me?.role,
+        });
+        setChecking(false);
       });
+    return () => { cancelled = true; };
   }, [router]);
 
   if (checking) {
@@ -61,6 +71,10 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <span className="text-muted">Email</span>
             <span className="text-fg">{user.email}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted">Role</span>
+            {user.role ? <RoleBadge role={user.role} /> : <span className="text-fg">—</span>}
           </div>
         </div>
 

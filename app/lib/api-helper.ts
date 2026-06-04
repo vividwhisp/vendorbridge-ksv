@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabase } from "./supabase-client";
 import { getTableById } from "./config";
 import { hasWorkflow, validateState } from "./workflow";
+import { can, normalizeRole, ROLE_HEADER, type Action, type Role } from "./rbac";
 
 function getApiSupabase(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,9 +30,26 @@ export async function getUserFromToken(request: Request) {
   return { user: data.user, supabase };
 }
 
+export function getRoleFromRequest(request: Request): Role {
+  const fromHeader = request.headers.get(ROLE_HEADER);
+  if (fromHeader) return normalizeRole(fromHeader);
+  return "user";
+}
+
+export function requireRole(request: Request, action: Action) {
+  const role = getRoleFromRequest(request);
+  if (!can(role, action)) {
+    throw new Error(`Forbidden: role "${role}" cannot ${action}`);
+  }
+  return role;
+}
+
 export function handleApiError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unauthorized";
-  return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 404 });
+  let status = 404;
+  if (message === "Unauthorized") status = 401;
+  else if (message.startsWith("Forbidden")) status = 403;
+  return NextResponse.json({ error: message }, { status });
 }
 
 async function getToken() {

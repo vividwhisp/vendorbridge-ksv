@@ -3,6 +3,7 @@ import {
   getUserFromToken,
   handleApiError,
   prepareInsertStatus,
+  requireRole,
   resolveTableName,
 } from "../../lib/api-helper";
 
@@ -13,6 +14,7 @@ export async function GET(
   try {
     const { table: tableId } = await params;
     const tableName = resolveTableName(tableId);
+    requireRole(request, "view");
     const { supabase } = await getUserFromToken(request);
     const { data, error } = await supabase
       .from(tableName)
@@ -33,6 +35,7 @@ export async function POST(
   try {
     const { table: tableId } = await params;
     const tableName = resolveTableName(tableId);
+    requireRole(request, "edit");
     const { user, supabase } = await getUserFromToken(request);
     const body = await request.json();
 

@@ -11,15 +11,17 @@ export type Database = {
           price: number;
           quantity: number;
           category: string;
+          status: string;
           created_at: string;
         };
         Insert: {
           id?: number;
-          user_id: string;
-          name: string;
+          user_id?: string;
+          name?: string;
           price?: number;
           quantity?: number;
           category?: string;
+          status?: string;
           created_at?: string;
         };
         Update: {
@@ -29,6 +31,25 @@ export type Database = {
           price?: number;
           quantity?: number;
           category?: string;
+          status?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      profiles: {
+        Row: {
+          user_id: string;
+          role: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          role?: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          role?: string;
           created_at?: string;
         };
         Relationships: [];

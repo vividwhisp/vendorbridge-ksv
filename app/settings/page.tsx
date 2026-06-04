@@ -6,6 +6,7 @@ import { getSupabase } from "../lib/supabase-client";
 import { useToast } from "../lib/toast-context";
 import { appConfig } from "../lib/config";
 import { hasWorkflow } from "../lib/workflow";
+import { RoleBadge } from "../components/role";
 import Navbar from "../components/navbar";
 import type { User } from "../types";
 
@@ -17,12 +18,21 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     getSupabase()
       .auth.getUser()
-      .then(({ data, error }) => {
-        if (error || !data.user) { router.push("/login"); }
-        else { setUser({ id: data.user.id, email: data.user.email ?? "" }); setChecking(false); }
+      .then(async ({ data, error }) => {
+        if (error || !data.user) { router.push("/login"); return; }
+        const { data: me } = await fetch("/api/me", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null) ?? {};
+        if (cancelled) return;
+        setUser({
+          id: data.user.id,
+          email: data.user.email ?? "",
+          role: me?.role,
+        });
+        setChecking(false);
       });
+    return () => { cancelled = true; };
   }, [router]);
 
   async function handleSignOut() {
@@ -75,6 +85,10 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <dt className="text-muted">Theme accent</dt>
               <dd className="text-fg capitalize">{appConfig.accent}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-muted">Your role</dt>
+              <dd>{user?.role ? <RoleBadge role={user.role} /> : <span className="text-fg">—</span>}</dd>
             </div>
           </dl>
         </section>
