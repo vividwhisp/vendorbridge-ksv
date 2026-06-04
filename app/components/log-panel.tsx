@@ -11,6 +11,8 @@ const LOG_COLORS: Record<string, string> = {
   DB: "#f87171",
   LLM: "#c084fc",
   AGENT: "#fbbf24",
+  REALTIME: "#10b981",
+  WORKFLOW: "#22d3ee",
 };
 
 type LogPanelProps = {

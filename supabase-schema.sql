@@ -27,8 +27,13 @@ create table if not exists products (
   price numeric not null default 0,
   quantity integer not null default 0,
   category text not null default 'General',
+  status text not null default 'Active',
   created_at timestamp with time zone not null default now()
 );
+
+-- If you already ran the previous version of this schema, add the
+-- status column with this one-liner instead of re-creating the table:
+--   alter table products add column status text not null default 'Active';
 
 alter table products enable row level security;
 

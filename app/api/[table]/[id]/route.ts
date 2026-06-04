@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, handleApiError, resolveTableName } from "../../../lib/api-helper";
+import {
+  getUserFromToken,
+  handleApiError,
+  prepareUpdateStatus,
+  resolveTableName,
+} from "../../../lib/api-helper";
 
 export async function PUT(
   request: Request,
@@ -11,9 +16,10 @@ export async function PUT(
     const { supabase } = await getUserFromToken(request);
     const body = await request.json();
 
+    const safeBody = prepareUpdateStatus(body, tableId);
     const { data, error } = await supabase
       .from(tableName)
-      .update(body)
+      .update(safeBody)
       .eq("id", Number(id))
       .select("*")
       .single();

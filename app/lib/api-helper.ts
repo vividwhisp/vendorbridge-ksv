@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSupabase } from "./supabase-client";
 import { getTableById } from "./config";
+import { hasWorkflow, validateState } from "./workflow";
 
 function getApiSupabase(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -47,6 +48,31 @@ export function resolveTableName(id: string): string {
   const t = getTableById(id);
   if (!t) throw new Error(`Unknown table: ${id}`);
   return t.tableName ?? t.id;
+}
+
+// Normalize `status` on insert: fill default if missing, validate if present.
+export function prepareInsertStatus(
+  row: Record<string, unknown>,
+  tableId: string,
+): Record<string, unknown> {
+  const table = getTableById(tableId);
+  if (!table || !hasWorkflow(table)) return row;
+  const check = validateState(row.status, table);
+  if (!check.ok) throw new Error(check.reason);
+  return { ...row, status: check.value };
+}
+
+// Validate `status` on update if present.
+export function prepareUpdateStatus(
+  body: Record<string, unknown>,
+  tableId: string,
+): Record<string, unknown> {
+  if (!("status" in body)) return body;
+  const table = getTableById(tableId);
+  if (!table || !hasWorkflow(table)) return body;
+  const check = validateState(body.status, table);
+  if (!check.ok) throw new Error(check.reason);
+  return { ...body, status: check.value };
 }
 
 export async function apiGetAll(tableId: string): Promise<Record<string, unknown>[]> {

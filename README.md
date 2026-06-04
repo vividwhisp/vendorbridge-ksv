@@ -10,6 +10,7 @@ Designed to be **adapted to any problem statement in minutes** by editing a sing
 
 - **Auth** — Supabase email/password login + signup (`/login`, `/signup`)
 - **Multi-table CRUD** — Token-aware API routes under `app/api/[table]/*` (GET / POST / PUT / DELETE / seed) — supports any number of entities
+- **Workflow system** — Optional `workflow: string[]` per table; auto-derived stats, status badges, timeline, dropdowns, and AI `update_status` action
 - **Dashboard** — Auth-aware navbar, sidebar nav, vertical list, search + filters, edit modal, slide-in log panel, table picker
 - **Charts** — Auto-derived bar + pie charts (recharts) themed from the active color palette
 - **Realtime sync** — Live INSERT / UPDATE / DELETE events from Supabase stream into the dashboard across all open sessions; "LIVE" indicator in the sidebar
@@ -19,7 +20,7 @@ Designed to be **adapted to any problem statement in minutes** by editing a sing
 - **Voice I/O** — Speech recognition + speech synthesis (Chrome/Edge)
 - **Settings / Profile pages** — Auth-guarded routes
 - **Landing page** — Public home with features, how-it-works, use cases, and footer
-- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, REALTIME, DB)
+- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, REALTIME, WORKFLOW, DB)
 - **Row-level security** — Per-user data isolation via Supabase RLS
 
 ---
@@ -212,11 +213,77 @@ The starter supports any number of entities through one mechanism: the `tables` 
 Two auto-derived charts appear on the dashboard whenever there is data:
 
 - **Bar chart** — count grouped by the first non-name non-numeric field. For items with a `category` field, this shows items per category. For tasks with a `status` field, this shows tasks per status.
-- **Pie chart** — low-stock vs in-stock (only shown when `lowStockField` is set on the active table).
+- **Pie chart** — low-stock vs in-stock (only shown when `lowStockField` is set on the active table). When `workflow` is set, the pie is replaced by a per-state distribution.
 
 Colors come from the active theme's `--chart-1` through `--chart-5` CSS variables, set on `<body>` in `app/layout.tsx`. The 5-color palette is defined per accent in `getAccentPalette()` (`app/lib/config.ts`). No extra config is needed — switching `accent` re-skins the charts instantly.
 
 To add a new chart, import a recharts component into `app/components/dashboard.tsx` and pass `palette.chart1` etc. (read via `getComputedStyle(document.body)`) as the `fill` color.
+
+## Workflow system
+
+Every `TableConfig` can declare an optional `workflow: string[]`. When set, the entire UI adapts to that lifecycle — stats, filters, badges, and the AI agent all know the states.
+
+### Declaring a workflow
+
+```ts
+{
+  id: "tickets",
+  entity: { name: "ticket", plural: "tickets", title: "Tickets" },
+  fields: [
+    { key: "title", label: "Title", type: "text", required: true },
+    { key: "priority", label: "Priority", type: "select", required: true },
+  ],
+  searchFields: ["title"],
+  workflow: ["Submitted", "Approved", "Assigned", "Resolved"],
+  samples: [
+    { title: "Login broken", priority: "High", status: "Submitted" },
+  ],
+}
+```
+
+The first state is the default; the list defines the order (used by `WorkflowTimeline`).
+
+### What the workflow enables automatically
+
+- **Auto-stats** — the dashboard replaces its fixed stat cards with `[Total] + [one card per workflow state] + [Filtered]`. Counts are derived via `countByState()` from the current items.
+- **Filter pills** — sidebar + main filter buttons are derived from the workflow (e.g. "Submitted / Approved / Assigned / Resolved") instead of the legacy "Low / OK" pair. Tables without `workflow` keep the legacy behavior.
+- **`<StatusBadge>`** — colored pill in each row, color taken from the chart palette by state index.
+- **`<StatusDropdown>`** — inline `<select>` that calls `apiUpdate({status})` on change. Includes `useTransition` for non-blocking UX and a "WORKFLOW" log entry on every change.
+- **`<WorkflowTimeline>`** — horizontal stepper rendered in the edit modal. Current state is filled with its color, past states show a checkmark, future states are outlined.
+- **Pie chart** — auto-derived per-state distribution when `workflow` is set.
+- **Add form** — gains a Status select defaulted to the first workflow state.
+- **AI agent** — gains an `update_status` action. The system prompt lists the workflow states and tells the model which strings are valid.
+
+### API validation
+
+- `POST /api/[table]` — if `status` is in the body, it must match the workflow. If omitted, the default state is filled in automatically.
+- `PUT /api/[table]/[id]` — if `status` is in the body, it must match the workflow.
+- Invalid values return a 4xx with the valid states listed in the error message.
+
+Both checks are implemented in `prepareInsertStatus()` and `prepareUpdateStatus()` in `app/lib/api-helper.ts`.
+
+### DB requirement
+
+A table that uses a workflow must have a `status text` column. Run this in Supabase:
+
+```sql
+alter table products add column status text not null default 'Active';
+```
+
+(or set the default to whatever the first state in your `workflow` array is).
+
+### Caveat
+
+State transitions are enforced **client-side and in the API** (i.e. an invalid status string is rejected), but the API does not currently restrict which state you can move *to* (you can skip from "Submitted" to "Resolved" in one step). For most hackathon demos this is fine. To enforce strict step-by-step transitions, add a check in `app/api/[table]/[id]/route.ts` that compares the current row's `status` with the new one.
+
+### Components
+
+- `app/components/workflow/status-badge.tsx` — colored pill
+- `app/components/workflow/status-dropdown.tsx` — inline `<select>` with optimistic update
+- `app/components/workflow/workflow-timeline.tsx` — horizontal stepper
+- `app/components/workflow/index.ts` — barrel export
+
+All three auto-style from the active theme's chart palette.
 
 ## Odoo X KSV Hackathon adaptation playbook
 
@@ -227,7 +294,7 @@ The Odoo X KSV hackathon problem statements are revealed on the spot. Use this c
 3. **Minute 15-25** — Open `supabase-schema.sql`. For each new table, copy the commented example, rename it, and uncomment it. Paste the full file into the Supabase SQL editor.
 4. **Minute 25-35** — Sign up, sign in, click "Load samples" for each table, verify the dashboard. The table picker in the sidebar should switch entities cleanly; charts should render; search should work; the "LIVE" badge in the sidebar confirms realtime is connected.
 5. **Minute 35-120** — Build the differentiating features on top. Common extensions:
-   - **Filters by status** — add `statuses` to the entity and a filter pill in the sidebar.
+   - **Lifecycle / status workflow** — add `workflow: ["Draft", "In Review", "Done"]` to the `TableConfig`. The dashboard auto-gains stat cards, filter pills, status badges, an inline `<StatusDropdown>`, a `<WorkflowTimeline>` in the edit modal, and an `update_status` action in the AI agent. See the [Workflow system](#workflow-system) section.
    - **Detail view per row** — add `app/items/[id]/page.tsx` with a server-rendered detail page.
    - **Cross-table relations** — use a numeric `item_id` field on the second table; the AI agent already understands this.
    - **Map view** — add a `lat`/`lng` field and render with a Leaflet iframe.
@@ -317,6 +384,7 @@ Add a matching line for every additional table you create, e.g. `alter publicati
    - `{ action: "update_stock", productId, newQuantity }` — set absolute quantity on the `lowStockField`
    - `{ action: "delete_item", productId }` — remove
    - `{ action: "add_item", name, ...other fields }` — insert
+   - `{ action: "update_status", productId, newStatus }` — move a record to a new workflow state (only when the active table has `workflow` set; `newStatus` must be one of the configured states)
    - `{ action: "query" }` (or empty actions) — just answer in `message`
 
 3. The client executes each action by calling the existing API routes (`apiUpdate`, `apiRemove`, `apiInsert`) on the active `tableId`.

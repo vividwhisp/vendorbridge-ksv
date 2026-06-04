@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { Row } from "../types";
 import type { TableConfig } from "../lib/config";
+import { hasWorkflow } from "../lib/workflow";
+import { WorkflowTimeline, StatusDropdown } from "./workflow";
 import Spin from "./spin";
 
 type EditModalProps = {
@@ -19,9 +21,17 @@ export default function EditModal({ item, table, onSave, onClose }: EditModalPro
       const v = item[f.key];
       initial[f.key] = v === undefined || v === null ? "" : String(v);
     }
+    if (hasWorkflow(table)) {
+      const fallback = table.workflow![0];
+      initial.status = String(item.status ?? fallback);
+    }
     return initial;
   });
   const [busy, setBusy] = useState(false);
+  const [currentState, setCurrentState] = useState<string>(
+    String(item.status ?? (hasWorkflow(table) ? table.workflow![0] : "")),
+  );
+  const useWorkflow = hasWorkflow(table);
 
   async function save() {
     setBusy(true);
@@ -30,6 +40,9 @@ export default function EditModal({ item, table, onSave, onClose }: EditModalPro
       const v = form[f.key];
       if (v === undefined || v === "") continue;
       payload[f.key] = f.type === "number" ? Number(v) : v;
+    }
+    if (useWorkflow && currentState) {
+      payload.status = currentState;
     }
     await onSave(Number(item.id), payload);
     setBusy(false);
@@ -43,6 +56,20 @@ export default function EditModal({ item, table, onSave, onClose }: EditModalPro
           <button onClick={onClose} className="text-muted hover:text-fg text-lg transition-colors">&times;</button>
         </div>
         <p className="text-muted text-[10px] font-mono mb-5">PUT /api/{table.id}/{String(item.id)}</p>
+        {useWorkflow && (
+          <div className="mb-5 p-3 bg-bg border border-border rounded-xl">
+            <p className="text-muted text-[10px] uppercase tracking-wider font-medium mb-3">Workflow</p>
+            <WorkflowTimeline state={currentState} table={table} />
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-muted text-xs">Set state:</span>
+              <StatusDropdown
+                item={{ ...item, status: currentState }}
+                table={table}
+                onUpdated={(next) => setCurrentState(String(next.status ?? ""))}
+              />
+            </div>
+          </div>
+        )}
         {table.fields.map((f) => (
           <div key={f.key} className="mb-4">
             <label className="text-muted text-xs block mb-1">

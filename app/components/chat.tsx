@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiUpdate, apiRemove, apiInsert, apiGetAll } from "../lib/api-helper";
 import { appConfig, type TableConfig } from "../lib/config";
+import { hasWorkflow } from "../lib/workflow";
 import type { LogFn, Row } from "../types";
 
 type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
@@ -16,8 +17,8 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 type AgentAction = {
-  action: "update_stock" | "delete_item" | "add_item" | "query";
-  productId?: number; newQuantity?: number;
+  action: "update_stock" | "delete_item" | "add_item" | "update_status" | "query";
+  productId?: number; newQuantity?: number; newStatus?: string;
   [key: string]: unknown;
 };
 
@@ -40,6 +41,7 @@ const actionLabels: Record<string, string> = {
   update_stock: "Updated",
   delete_item: "Deleted",
   add_item: "Added",
+  update_status: "Moved",
 };
 
 function buildAgentSystem(items: Row[], table: TableConfig) {
@@ -48,10 +50,13 @@ function buildAgentSystem(items: Row[], table: TableConfig) {
   const plural = table.entity.plural;
   const lowField = table.lowStockField;
   const lowThreshold = table.lowStockThreshold;
+  const workflow = table.workflow;
 
   return `You are an AI data management agent. You can answer questions AND take real actions on the database.
 
-You manage ${plural}. Each ${entityName} has these fields: ${fieldList}.${lowField ? ` An ${entityName} is considered "low stock" when ${lowField} < ${lowThreshold}.` : ""}
+You manage ${plural}. Each ${entityName} has these fields: ${fieldList}.${lowField ? ` An ${entityName} is considered "low stock" when ${lowField} < ${lowThreshold}.` : ""}${workflow ? `
+
+The ${entityName} lifecycle has these states: ${workflow.join(" → ")}. The first state is the default. Use the "update_status" action to move a ${entityName} through the lifecycle.` : ""}
 
 Current records in the database:
 ${JSON.stringify(items, null, 2)}
@@ -62,7 +67,8 @@ CRITICAL: You must ALWAYS respond with valid JSON only in this exact format. No 
   "actions": [
     { "action": "update_stock", "productId": <id>, "newQuantity": <number> },
     { "action": "delete_item", "productId": <id> },
-    { "action": "add_item", "<field_key>": <value>, ... }
+    { "action": "add_item", "<field_key>": <value>, ... },
+    { "action": "update_status", "productId": <id>, "newStatus": "<one of: ${workflow ? workflow.join(", ") : "n/a"}>" }
   ],
   "message": "<your short response to the user>"
 }
@@ -73,6 +79,7 @@ RULES:
 - For "update_stock": "newQuantity" is the FINAL absolute quantity (not a delta).
 - For "delete_item": only productId is needed.
 - For "add_item": include the required fields and any sensible defaults.
+- For "update_status": "newStatus" MUST be one of the workflow states listed above.
 - For "query": return an empty actions array and put the answer in "message".
 - Match ${entityName} names flexibly (case-insensitive, partial match).`;
 }
@@ -150,6 +157,15 @@ export default function Chat({ items, table, onItemsChange, log, onClose }: Chat
         log("API", `POST /api/${table.id}`);
         await apiInsert(table.id, insertable);
         log("API", `Item "${act.name}" added`, true);
+      } else if (act.action === "update_status" && act.productId && typeof act.newStatus === "string") {
+        if (!hasWorkflow(table) || !table.workflow!.includes(act.newStatus)) {
+          log("AGENT", `Skipped update_status: "${act.newStatus}" is not a valid state`);
+          continue;
+        }
+        log("AGENT", `UPDATE ${table.tableName ?? table.id} SET status='${act.newStatus}' WHERE id=${act.productId}`);
+        log("API", `PUT /api/${table.id}/${act.productId}`);
+        await apiUpdate(table.id, act.productId, { status: act.newStatus });
+        log("API", `Item ${act.productId} -> status=${act.newStatus}`, true);
       }
     }
   }

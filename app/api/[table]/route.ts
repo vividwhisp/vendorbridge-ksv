@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, handleApiError, resolveTableName } from "../../lib/api-helper";
+import {
+  getUserFromToken,
+  handleApiError,
+  prepareInsertStatus,
+  resolveTableName,
+} from "../../lib/api-helper";
 
 export async function GET(
   request: Request,
@@ -31,7 +36,8 @@ export async function POST(
     const { user, supabase } = await getUserFromToken(request);
     const body = await request.json();
 
-    const row = { ...body, user_id: user.id };
+    const withStatus = prepareInsertStatus(body, tableId);
+    const row = { ...withStatus, user_id: user.id };
     const { data, error } = await supabase
       .from(tableName)
       .insert(row)

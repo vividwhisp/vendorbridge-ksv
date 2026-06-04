@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getSupabase } from "../lib/supabase-client";
 import { useToast } from "../lib/toast-context";
 import { appConfig } from "../lib/config";
+import { hasWorkflow } from "../lib/workflow";
 import Navbar from "../components/navbar";
 import type { User } from "../types";
 
@@ -62,6 +63,14 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <dt className="text-muted">Fields</dt>
               <dd className="text-fg">{appConfig.fields.length}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-muted">Workflow states</dt>
+              <dd className="text-fg">
+                {hasWorkflow(appConfig.tables[0])
+                  ? (appConfig.tables[0].workflow ?? []).join(" → ")
+                  : "none"}
+              </dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-muted">Theme accent</dt>

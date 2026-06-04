@@ -20,12 +20,6 @@ export type FieldDef = {
   placeholder?: string;
 };
 
-export type StatusDef = {
-  value: string;
-  label: string;
-  color: string;
-};
-
 export type TableConfig = {
   // URL segment used by /api/[id] and as the table picker key.
   // Must be unique and URL-safe.
@@ -37,14 +31,17 @@ export type TableConfig = {
     name: string;
     plural: string;
     title: string;
-    statuses: readonly StatusDef[];
-    defaultStatus: string;
   };
   fields: readonly FieldDef[];
   searchFields: readonly string[];
   // Drives the red dot + low-stock filter. Omit if not applicable.
   lowStockField?: string;
   lowStockThreshold?: number;
+  // Optional workflow: ordered list of states this entity moves through.
+  // If set, the matching Postgres table must have a `status` text column
+  // (defaulted to the first state). The dashboard auto-derives stats,
+  // a "By status" bar chart, and a status dropdown per row.
+  workflow?: readonly string[];
   // Optional: per-table sample data for the "Load samples" button
   samples: readonly Record<string, string | number>[];
 };
@@ -62,11 +59,6 @@ const PRIMARY_TABLE: TableConfig = {
     name: "item",
     plural: "items",
     title: "Items",
-    statuses: [
-      { value: "ok", label: "Active", color: "green" },
-      { value: "low", label: "Low", color: "red" },
-    ],
-    defaultStatus: "ok",
   },
   fields: [
     { key: "name",     label: "Name",     type: "text",   required: true, placeholder: "e.g. iPhone 15" },
@@ -77,36 +69,32 @@ const PRIMARY_TABLE: TableConfig = {
   searchFields: ["name", "category"],
   lowStockField: "quantity",
   lowStockThreshold: 10,
+  workflow: ["Active", "Low"],
   samples: [
-    { name: "MacBook Air M3", price: 99999,  quantity: 12, category: "Laptops" },
-    { name: "iPhone 15 Pro",  price: 134999, quantity: 3,  category: "Phones" },
-    { name: "AirPods Pro",    price: 24999,  quantity: 89, category: "Audio" },
-    { name: "iPad Mini",      price: 49999,  quantity: 7,  category: "Tablets" },
-    { name: "Apple Watch S9", price: 41999,  quantity: 2,  category: "Wearables" },
-    { name: "Magic Keyboard", price: 11999,  quantity: 45, category: "Accessories" },
+    { name: "MacBook Air M3", price: 99999,  quantity: 12, category: "Laptops",    status: "Active" },
+    { name: "iPhone 15 Pro",  price: 134999, quantity: 3,  category: "Phones",     status: "Low"    },
+    { name: "AirPods Pro",    price: 24999,  quantity: 89, category: "Audio",      status: "Active" },
+    { name: "iPad Mini",      price: 49999,  quantity: 7,  category: "Tablets",    status: "Low"    },
+    { name: "Apple Watch S9", price: 41999,  quantity: 2,  category: "Wearables",  status: "Low"    },
+    { name: "Magic Keyboard", price: 11999,  quantity: 45, category: "Accessories", status: "Active" },
   ],
 };
 
 // Add more tables here as your problem statement demands.
-// Example: a "reviews" table for a marketplace problem.
+// Example: a "tickets" table for a helpdesk problem.
 //
-// const REVIEWS_TABLE: TableConfig = {
-//   id: "reviews",
-//   entity: {
-//     name: "review",
-//     plural: "reviews",
-//     title: "Reviews",
-//     statuses: [],
-//     defaultStatus: "",
-//   },
+// const TICKETS_TABLE: TableConfig = {
+//   id: "tickets",
+//   entity: { name: "ticket", plural: "tickets", title: "Tickets" },
 //   fields: [
-//     { key: "item_id", label: "Item", type: "number", required: true },
-//     { key: "rating",  label: "Rating", type: "number", required: true },
-//     { key: "comment", label: "Comment", type: "textarea" },
+//     { key: "title",    label: "Title",    type: "text",     required: true },
+//     { key: "priority", label: "Priority", type: "select",   required: true },
+//     { key: "notes",    label: "Notes",    type: "textarea" },
 //   ],
-//   searchFields: ["comment"],
+//   searchFields: ["title", "notes"],
+//   workflow: ["Submitted", "Approved", "Assigned", "Resolved"],
 //   samples: [
-//     { item_id: 1, rating: 5, comment: "Great product!" },
+//     { title: "Login broken", priority: "High", status: "Submitted" },
 //   ],
 // };
 

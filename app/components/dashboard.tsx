@@ -7,6 +7,8 @@ import { getSupabase } from "../lib/supabase-client";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
 import { appConfig, isLowStock, getTableById, getPrimaryTable, type TableConfig } from "../lib/config";
 import type { Row } from "../types";
+import { hasWorkflow, countByState, formatStateLabel } from "../lib/workflow";
+import { StatusBadge, StatusDropdown } from "./workflow";
 import Navbar from "./navbar";
 import Chat from "./chat";
 import CommandPalette from "./command-palette";
@@ -35,6 +37,7 @@ export default function DashboardView() {
   const [live, setLive] = useState(false);
 
   const currentTable: TableConfig = getTableById(activeTableId) ?? getPrimaryTable();
+  const useWorkflow = hasWorkflow(currentTable);
 
   const [, startTableTransition] = useTransition();
 
@@ -112,6 +115,15 @@ export default function DashboardView() {
     log("UI", `Switched to table: ${id}`);
   }
 
+  // Derived: filter pill list — workflow states OR the legacy stock pair.
+  const filterPills: { key: string; label: string }[] = useWorkflow
+    ? (currentTable.workflow ?? []).map((s) => ({ key: s, label: s }))
+    : [
+        { key: "all", label: "All" },
+        { key: "low", label: "Low stock" },
+        { key: "ok", label: "In stock" },
+      ];
+
   async function add() {
     const required = currentTable.fields.filter((f) => f.required).map((f) => f.key);
     if (required.some((k) => !form[k])) {
@@ -184,21 +196,38 @@ export default function DashboardView() {
   // ---- Derived stats + chart data ----
   const lowCount = items.filter((it) => isLowStock(it, currentTable)).length;
   const okCount = items.length - lowCount;
+  const stateCounts = useMemo(
+    () => (useWorkflow ? countByState(items, currentTable) : {}),
+    [items, currentTable, useWorkflow],
+  );
+
   const filtered = useMemo(() => items.filter((p) => {
     const q = search.toLowerCase();
     const matchSearch = !q || currentTable.searchFields.some((f) => String(p[f] ?? "").toLowerCase().includes(q));
-    const matchFilter = filter === "all"
-      || (filter === "low" && isLowStock(p, currentTable))
-      || (filter === "ok" && !isLowStock(p, currentTable));
+    let matchFilter: boolean;
+    if (useWorkflow) {
+      const state = String(p.status ?? "");
+      matchFilter = filter === "all" || filter === state;
+    } else {
+      matchFilter = filter === "all"
+        || (filter === "low" && isLowStock(p, currentTable))
+        || (filter === "ok" && !isLowStock(p, currentTable));
+    }
     return matchSearch && matchFilter;
-  }), [items, search, filter, currentTable]);
+  }), [items, search, filter, currentTable, useWorkflow]);
 
-  const stats = [
+  const stats: { label: string; value: string }[] = [
     { label: `Total ${currentTable.entity.title}`, value: String(items.length) },
-    { label: "Low Stock", value: String(lowCount) },
-    { label: "In Stock", value: String(okCount) },
-    { label: "Filtered", value: String(filtered.length) },
   ];
+  if (useWorkflow) {
+    for (const state of currentTable.workflow!) {
+      stats.push({ label: formatStateLabel(state), value: String(stateCounts[state] ?? 0) });
+    }
+  } else {
+    stats.push({ label: "Low Stock", value: String(lowCount) });
+    stats.push({ label: "In Stock", value: String(okCount) });
+  }
+  stats.push({ label: "Filtered", value: String(filtered.length) });
 
   // Chart data: distribution by first non-name non-numeric field (categorical)
   const categoricalField = currentTable.fields.find((f) => f.key !== "name" && f.type !== "number");
@@ -215,10 +244,18 @@ export default function DashboardView() {
       .slice(0, 6);
   }, [items, categoricalField]);
 
-  const statusPie: PieDatum[] = useMemo(() => [
-    { label: "In stock", value: okCount },
-    { label: "Low stock", value: lowCount },
-  ], [okCount, lowCount]);
+  const statusPie: PieDatum[] = useMemo(() => {
+    if (useWorkflow) {
+      return (currentTable.workflow ?? []).map((state) => ({
+        label: state,
+        value: stateCounts[state] ?? 0,
+      }));
+    }
+    return [
+      { label: "In stock", value: okCount },
+      { label: "Low stock", value: lowCount },
+    ];
+  }, [useWorkflow, currentTable, stateCounts, okCount, lowCount]);
 
   // ---- Render ----
   return (
@@ -264,24 +301,15 @@ export default function DashboardView() {
             <p className="text-muted text-[10px] font-mono mt-1">{items.length} {currentTable.entity.plural}</p>
           </div>
           <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
-            <button
-              onClick={() => { setFilter("all"); log("UI", "Filter: all"); }}
-              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "all" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => { setFilter("low"); log("UI", "Filter: low"); }}
-              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "low" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
-            >
-              Low stock
-            </button>
-            <button
-              onClick={() => { setFilter("ok"); log("UI", "Filter: ok"); }}
-              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === "ok" ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
-            >
-              In stock
-            </button>
+            {filterPills.map((pill) => (
+              <button
+                key={pill.key}
+                onClick={() => { setFilter(pill.key); log("UI", `Filter: ${pill.key}`); }}
+                className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === pill.key ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
+              >
+                {pill.label}
+              </button>
+            ))}
             <div className="border-t border-border my-2" />
             <button
               onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
@@ -334,10 +362,16 @@ export default function DashboardView() {
                   className="w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-fg text-sm outline-none focus:border-muted transition-colors"
                 />
               </div>
-              <div className="flex gap-1">
-                <button onClick={() => { setFilter("all"); log("UI", "Filter: all"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "all" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>All</button>
-                <button onClick={() => { setFilter("low"); log("UI", "Filter: low"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "low" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>Low</button>
-                <button onClick={() => { setFilter("ok"); log("UI", "Filter: ok"); }} className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === "ok" ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}>OK</button>
+              <div className="flex gap-1 flex-wrap">
+                {filterPills.map((pill) => (
+                  <button
+                    key={pill.key}
+                    onClick={() => { setFilter(pill.key); log("UI", `Filter: ${pill.key}`); }}
+                    className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === pill.key ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
               </div>
               <button
                 onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
@@ -370,6 +404,22 @@ export default function DashboardView() {
                       />
                     </div>
                   ))}
+                  {useWorkflow && (
+                    <div>
+                      <label className="text-muted text-[10px] uppercase block mb-1.5 font-medium">
+                        Status
+                      </label>
+                      <select
+                        value={form.status ?? currentTable.workflow![0]}
+                        onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                        className="w-full bg-bg border border-border rounded-md px-2.5 py-1.5 text-fg text-sm outline-none focus:border-muted transition-colors"
+                      >
+                        {(currentTable.workflow ?? []).map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <button onClick={add} disabled={adding} className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-bg text-sm font-medium rounded-md px-3.5 py-1.5 transition-colors flex items-center gap-2">
                   {adding ? <><Spin s={10} /><span>Saving...</span></> : "Save"}
@@ -412,6 +462,7 @@ export default function DashboardView() {
                 {filtered.map((item, i) => {
                   const id = Number(item.id);
                   const name = String(item.name ?? `#${id}`);
+                  const state = String(item.status ?? "");
                   return (
                     <div
                       key={id}
@@ -423,9 +474,13 @@ export default function DashboardView() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-fg text-sm truncate">{name}</span>
-                          {isLowStock(item, currentTable) && (
+                          {useWorkflow && state ? (
+                            <span className="flex-shrink-0">
+                              <StatusBadge state={state} table={currentTable} />
+                            </span>
+                          ) : isLowStock(item, currentTable) ? (
                             <span className="text-[9px] font-semibold text-danger bg-low-bg border border-low-border rounded px-1.5 py-0.5 flex-shrink-0">LOW</span>
-                          )}
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
                           {currentTable.fields.filter((f) => f.key !== "name").slice(0, 3).map((f) => (
@@ -435,7 +490,18 @@ export default function DashboardView() {
                           ))}
                         </div>
                       </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
+                      <div className="flex gap-1.5 flex-shrink-0 items-center">
+                        {useWorkflow && (
+                          <StatusDropdown
+                            item={item}
+                            table={currentTable}
+                            onUpdated={(next) => {
+                              setItems((prev) =>
+                                prev.map((it) => (Number(it.id) === id ? next : it)),
+                              );
+                            }}
+                          />
+                        )}
                         <button onClick={() => { setEditItem(item); log("UI", `Edit modal opened for "${name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
                           Edit
                         </button>
