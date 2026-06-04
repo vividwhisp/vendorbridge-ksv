@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { Product } from "../types";
+import type { Row } from "../types";
 import type { TableConfig } from "../lib/config";
 import Spin from "./spin";
 
 type EditModalProps = {
-  item: Record<string, unknown>;
+  item: Row;
   table: TableConfig;
-  onSave: (id: number, data: Partial<Omit<Product, "id">>) => Promise<void> | void;
+  onSave: (id: number, data: Row) => Promise<void> | void;
   onClose: () => void;
 };
 
@@ -31,7 +31,7 @@ export default function EditModal({ item, table, onSave, onClose }: EditModalPro
       if (v === undefined || v === "") continue;
       payload[f.key] = f.type === "number" ? Number(v) : v;
     }
-    await onSave(Number(item.id), payload as Partial<Omit<Product, "id">>);
+    await onSave(Number(item.id), payload);
     setBusy(false);
   }
 

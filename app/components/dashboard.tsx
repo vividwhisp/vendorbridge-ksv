@@ -5,7 +5,7 @@ import { useLog } from "../lib/log-context";
 import { useToast } from "../lib/toast-context";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
 import { appConfig, isLowStock, getTableById, getPrimaryTable, type TableConfig } from "../lib/config";
-import type { Product } from "../types";
+import type { Row } from "../types";
 import Navbar from "./navbar";
 import Chat from "./chat";
 import CommandPalette from "./command-palette";
@@ -19,12 +19,12 @@ export default function DashboardView() {
   const { log, logs, clearLogs } = useLog();
   const { showToast } = useToast();
   const [activeTableId, setActiveTableId] = useState<string>(getPrimaryTable().id);
-  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
-  const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
+  const [editItem, setEditItem] = useState<Row | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -41,7 +41,7 @@ export default function DashboardView() {
     apiGetAll(id)
       .then((data) => {
         if (cancelled) return;
-        setItems(data as Record<string, unknown>[]);
+        setItems(data);
         setLoading(false);
         log("API", `GET /api/${id} -> ${data.length} items`, true);
       })
@@ -88,7 +88,7 @@ export default function DashboardView() {
         if (v === undefined || v === "") continue;
         payload[f.key] = f.type === "number" ? Number(v) : v;
       }
-      const row = (await apiInsert(currentTable.id, payload)) as Record<string, unknown>;
+      const row = await apiInsert(currentTable.id, payload);
       log("API", `POST /api/${currentTable.id} -> id:${row.id}`, true);
       setItems((prev) => [...prev, row]);
       setForm({});
@@ -100,10 +100,10 @@ export default function DashboardView() {
     } finally { setAdding(false); }
   }
 
-  async function save(id: number, data: Partial<Omit<Product, "id">>) {
+  async function save(id: number, data: Row) {
     log("API", `PUT /api/${currentTable.id}/${id}`);
     try {
-      const updated = (await apiUpdate(currentTable.id, id, data as Record<string, unknown>)) as Record<string, unknown>;
+      const updated = await apiUpdate(currentTable.id, id, data);
       log("API", `PUT /api/${currentTable.id}/${id} -> ok`, true);
       setItems((prev) => prev.map((item) => (Number(item.id) === id ? updated : item)));
       setEditItem(null);
@@ -132,7 +132,7 @@ export default function DashboardView() {
     setSeeding(true);
     log("API", `POST /api/${currentTable.id}/seed`);
     try {
-      const rows = (await apiSeed(currentTable.id)) as Record<string, unknown>[];
+      const rows = await apiSeed(currentTable.id);
       log("API", `POST /api/${currentTable.id}/seed -> ${rows.length} items`, true);
       setItems((prev) => [...prev, ...rows]);
       showToast(`Loaded ${rows.length} sample ${currentTable.entity.plural}`, "success");
@@ -431,16 +431,16 @@ export default function DashboardView() {
 
       {showChat && (
         <Chat
-          items={items as Product[]}
+          items={items}
           table={currentTable}
-          onItemsChange={(next) => setItems(next as Record<string, unknown>[])}
+          onItemsChange={setItems}
           log={log}
           onClose={() => setShowChat(false)}
         />
       )}
 
       <CommandPalette
-        items={items as Product[]}
+        items={items}
         table={currentTable}
         onAdd={() => setShowForm(true)}
         onAI={() => setShowChat((s) => !s)}

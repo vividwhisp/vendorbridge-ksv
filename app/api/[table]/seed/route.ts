@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, resolveTableName } from "../../../lib/api-helper";
+import { getUserFromToken, handleApiError, resolveTableName } from "../../../lib/api-helper";
 import { getTableById } from "../../../lib/config";
 
 export async function POST(
@@ -26,7 +26,6 @@ export async function POST(
     if (error) throw new Error(error.message);
     return NextResponse.json(data ?? [], { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unauthorized";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 404 });
+    return handleApiError(error);
   }
 }

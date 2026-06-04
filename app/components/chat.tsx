@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiUpdate, apiRemove, apiInsert, apiGetAll } from "../lib/api-helper";
 import { appConfig, type TableConfig } from "../lib/config";
-import type { LogFn, Product } from "../types";
+import type { LogFn, Row } from "../types";
 
 type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
 type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike> };
@@ -29,9 +29,9 @@ type AgentResponse = {
 type Message = { role: "ai" | "user"; text: string; actions?: AgentAction[] };
 
 type ChatProps = {
-  items: Product[];
+  items: Row[];
   table: TableConfig;
-  onItemsChange: (items: Product[]) => void;
+  onItemsChange: (items: Row[]) => void;
   log: LogFn;
   onClose: () => void;
 };
@@ -42,7 +42,7 @@ const actionLabels: Record<string, string> = {
   add_item: "Added",
 };
 
-function buildAgentSystem(items: Product[], table: TableConfig) {
+function buildAgentSystem(items: Row[], table: TableConfig) {
   const fieldList = table.fields.map((f) => `${f.key}${f.required ? " (required)" : ""}`).join(", ");
   const entityName = table.entity.name;
   const plural = table.entity.plural;
@@ -190,7 +190,7 @@ export default function Chat({ items, table, onItemsChange, log, onClose }: Chat
       if (parsed.actions.length > 0) {
         await executeActions(parsed.actions);
         const fresh = await apiGetAll(table.id);
-        onItemsChange(fresh as Product[]);
+        onItemsChange(fresh);
       } else {
         log("AGENT", "Query only - no DB action needed");
       }

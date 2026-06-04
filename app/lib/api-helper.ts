@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 import { getSupabase } from "./supabase-client";
 import { getTableById } from "./config";
 
@@ -25,6 +26,11 @@ export async function getUserFromToken(request: Request) {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) throw new Error("Unauthorized");
   return { user: data.user, supabase };
+}
+
+export function handleApiError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Unauthorized";
+  return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 404 });
 }
 
 async function getToken() {

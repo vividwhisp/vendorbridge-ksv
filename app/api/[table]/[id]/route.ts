@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, resolveTableName } from "../../../lib/api-helper";
+import { getUserFromToken, handleApiError, resolveTableName } from "../../../lib/api-helper";
 
 export async function PUT(
   request: Request,
@@ -21,8 +21,7 @@ export async function PUT(
     if (error) throw new Error(error.message);
     return NextResponse.json(data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unauthorized";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 404 });
+    return handleApiError(error);
   }
 }
 
@@ -43,7 +42,6 @@ export async function DELETE(
     if (error) throw new Error(error.message);
     return new Response(null, { status: 204 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unauthorized";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 404 });
+    return handleApiError(error);
   }
 }

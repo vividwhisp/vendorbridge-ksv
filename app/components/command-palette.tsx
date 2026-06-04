@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Product } from "../types";
+import type { Row } from "../types";
 import { appConfig, type TableConfig } from "../lib/config";
 
 type CommandItem = {
@@ -13,7 +13,7 @@ type CommandItem = {
 };
 
 type Props = {
-  items: Product[];
+  items: Row[];
   table: TableConfig;
   onAdd?: () => void;
   onAI?: () => void;
@@ -53,7 +53,7 @@ export default function CommandPalette({ items, table, onAdd, onAI }: Props) {
     { id: "nav-profile", label: "Go to profile", action: () => { router.push("/profile"); setOpen(false); } },
     ...items.slice(0, 20).map((it) => ({
       id: `item-${it.id}`,
-      label: it.name,
+      label: String(it.name ?? `#${it.id}`),
       hint: `#${it.id}`,
       action: () => { setOpen(false); },
     })),

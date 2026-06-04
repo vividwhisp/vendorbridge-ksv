@@ -113,7 +113,6 @@ const PRIMARY_TABLE: TableConfig = {
 export const appConfig = {
   // ---------- Branding ----------
   name: "DataHub",
-  tagline: "AI-powered data workspace",
   description: "Manage any data with search, filters, and an AI agent.",
 
   // Accent: drives the entire theme. See getAccentPalette() below.
@@ -160,14 +159,6 @@ export function getPrimaryTable(): TableConfig {
   return appConfig.tables[0];
 }
 
-export function getField(key: string): FieldDef | undefined {
-  return PRIMARY_TABLE.fields.find((f) => f.key === key);
-}
-
-export function getStatus(value: string) {
-  return PRIMARY_TABLE.entity.statuses.find((s) => s.value === value);
-}
-
 export function isLowStock(item: Record<string, unknown>, table: TableConfig = PRIMARY_TABLE): boolean {
   const field = table.lowStockField;
   if (!field) return false;
@@ -178,7 +169,7 @@ export function isLowStock(item: Record<string, unknown>, table: TableConfig = P
 // =============================================================
 //  Accent palette — drives the actual CSS color values
 // =============================================================
-export type ThemeName = "green" | "blue" | "purple" | "red" | "orange" | "grey";
+export type ThemeName = "green" | "blue" | "purple" | "red" | "orange";
 
 export type AccentPalette = {
   accent: string;

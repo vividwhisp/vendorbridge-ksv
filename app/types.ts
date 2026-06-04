@@ -3,14 +3,7 @@ export type User = {
   email: string;
 };
 
-export type Product = {
-  id: number;
-  name: string;
-  price: number;
-  quantity: number;
-  category: string;
-  user_id?: string;
-};
+export type Row = Record<string, unknown>;
 
 export type LogEntry = {
   id: number;
