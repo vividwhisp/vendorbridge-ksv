@@ -18,6 +18,7 @@ Designed to be **adapted to any problem statement in minutes** by editing a sing
 - **Toast system** — React context, no extra deps
 - **Command palette** — `⌘K` / `Ctrl+K` to search items and run commands
 - **AI agent** — Floating chat widget, takes real actions on the DB via JSON actions; system prompt auto-rebuilds per active table
+- **AI utility layer** — Reusable typed helpers (`summarize`, `classify`, `prioritize`, `recommend`, `extractInsights`) over a provider-agnostic `AIProvider` interface. See the [AI utility layer](#ai-utility-layer) section.
 - **Voice I/O** — Speech recognition + speech synthesis (Chrome/Edge)
 - **Settings / Profile pages** — Auth-guarded routes
 - **Landing page** — Public home with features, how-it-works, use cases, and footer
@@ -221,7 +222,9 @@ Colors come from the active theme's `--chart-1` through `--chart-5` CSS variable
 
 To add a new chart, import a recharts component into `app/components/dashboard.tsx` and pass `palette.chart1` etc. (read via `getComputedStyle(document.body)`) as the `fill` color.
 
-## Workflow systemEvery `TableConfig` can declare an optional `workflow: string[]`. When set, the entire UI adapts to that lifecycle — stats, filters, badges, and the AI agent all know the states.
+## Workflow system
+
+Every `TableConfig` can declare an optional `workflow: string[]`. When set, the entire UI adapts to that lifecycle — stats, filters, badges, and the AI agent all know the states.
 
 ### Declaring a workflow
 
@@ -305,7 +308,9 @@ The Odoo X KSV hackathon problem statements are revealed on the spot. Use this c
 
 ---
 
-## File uploadsAny `FieldDef` can declare `type: "file"`. When it does, the form generator renders `<FileUpload />` instead of an `<input>`. The uploaded public URL is saved into the row automatically — no extra API call needed.
+## File uploads
+
+Any `FieldDef` can declare `type: "file"`. When it does, the form generator renders `<FileUpload />` instead of an `<input>`. The uploaded public URL is saved into the row automatically — no extra API call needed.
 
 ### Declaring a file field
 
@@ -482,12 +487,109 @@ The auth checks inside each page component (`useEffect → getUser → router.pu
 
 ---
 
+## AI utility layer
+
+The chat widget is just one consumer. The real reuse sits in `app/lib/ai/` — a small, provider-agnostic layer of typed helpers and prompts you can call from any component, route, or external system.
+
+### Architecture
+
+```
+app/lib/ai/
+├── provider.ts   # AIProvider interface + openRouterProvider() + mockProvider()
+├── prompts.ts    # central PROMPTS object + buildAgentPrompt(opts) factory
+├── run.ts        # Result<T> + runTask<T>() (JSON parse + 1 retry + backoff) + runText()
+└── index.ts      # barrel: summarize, classify, prioritize, recommend, extractInsights, askAgent
+```
+
+- **`AIProvider`** is the only thing that talks to a real model. Its interface is intentionally tiny: `complete(messages) → string`. JSON-mode, streaming, and tool-use are deferred to provider-specific subclasses — none of which you need to implement for the defaults.
+- **`runTask<T>()`** wraps any prompt with: schema-hint injection, ```json fence stripping, **one retry with a "fix it" nudge** on parse failure, and **exponential backoff (350ms / 700ms)** on network failure. Returns a `Result<T>` discriminated union — never throws on bad LLM output.
+- **`prompts.ts`** is the single source of truth for prompt text. Edit once, every helper and the chat widget picks it up.
+
+### Available helpers
+
+| Helper | Input | Output |
+|---|---|---|
+| `summarize(text)` | free text | `{ summary: string, keyPoints: string[] }` |
+| `classify(text, categories)` | text + category list | `{ category: string, confidence: "low"\|"medium"\|"high" }` |
+| `prioritize(text)` | task / issue description | `{ priority: "P0"\|"P1"\|"P2"\|"P3", reason: string }` |
+| `recommend(context)` | context about the user/situation | `{ recommendation: string, rationale: string, alternatives: string[] }` |
+| `extractInsights(data)` | any JSON data | `{ insights: { title, detail, severity }[] }` |
+| `askAgent(opts)` | entity config + items + user message | `{ actions: AgentAction[], message: string }` (powers the chat widget) |
+| `runPlainText(system, user)` | raw prompt | free-form text reply |
+
+All return a `Result<T>`: `{ ok: true, data, raw }` or `{ ok: false, error, raw? }`.
+
+### Env vars
+
+| Variable | Required? | Default | Notes |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | yes (for real calls) | — | If missing → app auto-falls back to `mockProvider`, so dev still boots |
+| `OPENROUTER_MODEL` | no | `openrouter/free` | Any OpenRouter model ID |
+| `OPENROUTER_REFERER` | no | — | Optional `HTTP-Referer` header |
+| `OPENROUTER_TITLE` | no | — | Optional `X-Title` header |
+| `AI_PROVIDER=mock` | no | — | Force the mock provider (useful in tests) |
+
+### Swapping the provider
+
+`provider.ts` is the only file you touch:
+
+```ts
+// app/lib/ai/provider.ts
+import type { AIProvider, ChatMessage } from "./provider";
+
+export function anthropicProvider(): AIProvider {
+  return {
+    name: "anthropic",
+    async complete(messages: ChatMessage[]) { /* ... */ },
+  };
+}
+
+// then in getProvider():
+return process.env.ANTHROPIC_API_KEY ? anthropicProvider() : mockProvider();
+```
+
+No helper, route, or component needs to change.
+
+### Calling from a server route
+
+```ts
+// app/api/ai/route.ts (already included)
+POST { task: "summarize", text: "..." }
+// → { ok: true, data: { summary, keyPoints }, raw }
+```
+
+### Calling from a client component
+
+```ts
+import { summarize } from "@/app/lib/ai"; // or import directly in a server component
+const result = await summarize(notes);
+if (result.ok) setKeyPoints(result.data.keyPoints);
+```
+
+> Note: helpers hit the provider directly, so they need a server context (API route, server component, server action). For browser-side calls, hit `/api/ai` instead.
+
+### Adding a new AI task in 3 lines
+
+1. Add a `translateglish` entry to `PROMPTS` in `prompts.ts` (template function).
+2. Add `translateglish(input)` to the barrel in `index.ts` — call `runTask({ system, user, parse, schemaHint: '{ "translation": string }' })`.
+3. (Optional) expose it in `/api/ai` by adding the case.
+
+### Hackathon playbook — using AI elsewhere
+
+- Need a "smart search" box? Call `classify(query, categories)` to bucket the query, then filter.
+- Need a daily summary email? `summarize()` over a day's worth of activity in a cron route.
+- Need anomaly detection? `extractInsights(items)` and check `severity === "high"`.
+- Need auto-categorization on insert? Call `classify()` from the POST route handler before persisting.
+
+---
+
 ## Project structure
 
 ```
 app/
 ├── api/
-│   ├── chat/route.ts                 # OpenRouter proxy
+│   ├── ai/route.ts                   # generic AI tasks (summarize, classify, ...)
+│   ├── chat/route.ts                 # legacy free-form chat (delegates to provider)
 │   ├── me/route.ts                   # current user + role
 │   └── [table]/                      # dynamic, per declared table
 │       ├── route.ts                  # GET / POST
@@ -512,7 +614,16 @@ app/
 │   ├── supabase-db.ts                # auth helpers (signIn/Up/Out)
 │   ├── api-helper.ts                 # client + server API helpers
 │   ├── log-context.tsx               # dev log React context
-│   └── toast-context.tsx             # toast React context
+│   ├── toast-context.tsx             # toast React context
+│   ├── workflow.ts                   # state helpers (hasWorkflow, getStateColor, ...)
+│   ├── storage.ts                    # file upload helpers
+│   ├── rbac.ts                       # roles + PERMISSIONS matrix
+│   ├── role-context.tsx              # <RoleProvider> + useUserRole()
+│   └── ai/                           # provider-agnostic AI utility layer
+│       ├── provider.ts               # AIProvider + openRouter + mock
+│       ├── prompts.ts                # central PROMPTS + buildAgentPrompt
+│       ├── run.ts                    # runTask<T> + runText + Result<T>
+│       └── index.ts                  # summarize/classify/prioritize/...
 ├── dashboard/page.tsx                # auth-guarded dashboard
 ├── settings/page.tsx                 # auth-guarded settings
 ├── profile/page.tsx                  # auth-guarded profile

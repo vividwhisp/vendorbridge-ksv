@@ -5,6 +5,7 @@ import { apiUpdate, apiRemove, apiInsert, apiGetAll } from "../lib/api-helper";
 import { appConfig, type TableConfig } from "../lib/config";
 import { hasWorkflow } from "../lib/workflow";
 import { canDelete, canEdit, type Role } from "../lib/rbac";
+import { buildAgentPrompt } from "../lib/ai/prompts";
 import type { LogFn, Row } from "../types";
 
 type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
@@ -47,43 +48,15 @@ const actionLabels: Record<string, string> = {
 };
 
 function buildAgentSystem(items: Row[], table: TableConfig) {
-  const fieldList = table.fields.map((f) => `${f.key}${f.required ? " (required)" : ""}`).join(", ");
-  const entityName = table.entity.name;
-  const plural = table.entity.plural;
-  const lowField = table.lowStockField;
-  const lowThreshold = table.lowStockThreshold;
-  const workflow = table.workflow;
-
-  return `You are an AI data management agent. You can answer questions AND take real actions on the database.
-
-You manage ${plural}. Each ${entityName} has these fields: ${fieldList}.${lowField ? ` An ${entityName} is considered "low stock" when ${lowField} < ${lowThreshold}.` : ""}${workflow ? `
-
-The ${entityName} lifecycle has these states: ${workflow.join(" → ")}. The first state is the default. Use the "update_status" action to move a ${entityName} through the lifecycle.` : ""}
-
-Current records in the database:
-${JSON.stringify(items, null, 2)}
-
-CRITICAL: You must ALWAYS respond with valid JSON only in this exact format. No extra text, no markdown, no backticks.
-
-{
-  "actions": [
-    { "action": "update_stock", "productId": <id>, "newQuantity": <number> },
-    { "action": "delete_item", "productId": <id> },
-    { "action": "add_item", "<field_key>": <value>, ... },
-    { "action": "update_status", "productId": <id>, "newStatus": "<one of: ${workflow ? workflow.join(", ") : "n/a"}>" }
-  ],
-  "message": "<your short response to the user>"
-}
-
-RULES:
-- The "actions" array can have MULTIPLE actions or be empty for queries.
-- The "message" field is what you say to the user (keep it under 2 sentences).
-- For "update_stock": "newQuantity" is the FINAL absolute quantity (not a delta).
-- For "delete_item": only productId is needed.
-- For "add_item": include the required fields and any sensible defaults.
-- For "update_status": "newStatus" MUST be one of the workflow states listed above.
-- For "query": return an empty actions array and put the answer in "message".
-- Match ${entityName} names flexibly (case-insensitive, partial match).`;
+  return buildAgentPrompt({
+    entityName: table.entity.name,
+    plural: table.entity.plural,
+    fields: table.fields,
+    lowStockField: table.lowStockField,
+    lowStockThreshold: table.lowStockThreshold,
+    workflow: table.workflow,
+    items,
+  });
 }
 
 export default function Chat({ items, table, onItemsChange, log, onClose, role = "user" }: ChatProps) {
