@@ -12,13 +12,14 @@ Designed to be **adapted to any problem statement in minutes** by editing a sing
 - **Multi-table CRUD** — Token-aware API routes under `app/api/[table]/*` (GET / POST / PUT / DELETE / seed) — supports any number of entities
 - **Dashboard** — Auth-aware navbar, sidebar nav, vertical list, search + filters, edit modal, slide-in log panel, table picker
 - **Charts** — Auto-derived bar + pie charts (recharts) themed from the active color palette
+- **Realtime sync** — Live INSERT / UPDATE / DELETE events from Supabase stream into the dashboard across all open sessions; "LIVE" indicator in the sidebar
 - **Toast system** — React context, no extra deps
 - **Command palette** — `⌘K` / `Ctrl+K` to search items and run commands
 - **AI agent** — Floating chat widget, takes real actions on the DB via JSON actions; system prompt auto-rebuilds per active table
 - **Voice I/O** — Speech recognition + speech synthesis (Chrome/Edge)
 - **Settings / Profile pages** — Auth-guarded routes
 - **Landing page** — Public home with features, how-it-works, use cases, and footer
-- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, DB)
+- **Dev log** — Color-coded console panel showing every layer (UI, API, AUTH, LLM, AGENT, REALTIME, DB)
 - **Row-level security** — Per-user data isolation via Supabase RLS
 
 ---
@@ -224,14 +225,13 @@ The Odoo X KSV hackathon problem statements are revealed on the spot. Use this c
 1. **Minute 0-5** — Read the problem statement, identify the entity types (1-4 is typical), sketch a quick schema on paper.
 2. **Minute 5-15** — Open `app/lib/config.ts`. Set `accent` to match any brand colors, then fill in `tables[]` with one `TableConfig` per entity. Use the entity name, 3-6 fields, and 5-8 sample rows per table. Keep field names short and obvious.
 3. **Minute 15-25** — Open `supabase-schema.sql`. For each new table, copy the commented example, rename it, and uncomment it. Paste the full file into the Supabase SQL editor.
-4. **Minute 25-35** — Sign up, sign in, click "Load samples" for each table, verify the dashboard. The table picker in the sidebar should switch entities cleanly; charts should render; search should work.
+4. **Minute 25-35** — Sign up, sign in, click "Load samples" for each table, verify the dashboard. The table picker in the sidebar should switch entities cleanly; charts should render; search should work; the "LIVE" badge in the sidebar confirms realtime is connected.
 5. **Minute 35-120** — Build the differentiating features on top. Common extensions:
    - **Filters by status** — add `statuses` to the entity and a filter pill in the sidebar.
    - **Detail view per row** — add `app/items/[id]/page.tsx` with a server-rendered detail page.
    - **Cross-table relations** — use a numeric `item_id` field on the second table; the AI agent already understands this.
    - **Map view** — add a `lat`/`lng` field and render with a Leaflet iframe.
    - **File upload** — use Supabase Storage with a `file_url` text field.
-   - **Realtime** — wire `supabase.channel(...).on('postgres_changes', ...)` to refresh the list on inserts/updates.
 6. **Pro tip** — keep the demo creds (`kori@dev.com` / `1234`) pre-filled on the login form so the judge can sign in instantly.
 7. **Pro tip** — change `accent` to match the problem domain in one line. Purple for collaboration, blue for finance, green for inventory, red for emergencies, orange for marketplaces.
 
@@ -290,6 +290,18 @@ supabase-schema.sql                   # products table + RLS + example block
 4. All DB queries use the user-scoped client → RLS policies (`auth.uid() = user_id`) ensure users only see their own data.
 
 You never need to write auth checks inside route handlers — `getUserFromToken` throws if the token is missing/invalid, and the catch block returns `401`.
+
+---
+
+## How realtime works
+
+The dashboard subscribes to `postgres_changes` events on the active table via Supabase Realtime. Whenever any row is inserted, updated, or deleted (by any user, on any device), the dashboard refetches the table and the change appears in < 1 second. A "LIVE" badge in the sidebar confirms the connection.
+
+**One-time SQL setup required.** Realtime is off by default for new tables. The starter schema includes the line:
+```sql
+alter publication supabase_realtime add table products;
+```
+Add a matching line for every additional table you create, e.g. `alter publication supabase_realtime add table reviews;`. Without this, the subscription connects but no events are delivered.
 
 ---
 

@@ -49,6 +49,11 @@ create policy "Users can delete own products"
 on products for delete
 using (auth.uid() = user_id);
 
+-- Enable Realtime so the dashboard can subscribe to live changes
+-- (insert / update / delete events stream to the browser).
+-- Run this once per table you want to sync live.
+alter publication supabase_realtime add table products;
+
 
 -- =============================================================
 --  EXAMPLE — second table for a marketplace-style problem.

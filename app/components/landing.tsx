@@ -4,55 +4,9 @@ import Link from "next/link";
 import { appConfig } from "../lib/config";
 import Navbar from "./navbar";
 
+const { pill, heroAccent, features, howItWorks, useCases } = appConfig.landing;
+
 export default function Landing() {
-  const features = [
-    {
-      title: "Real-time sync",
-      desc: "Live updates from Supabase with row-level security. Your data, isolated per user.",
-      icon: "01",
-    },
-    {
-      title: "AI agent",
-      desc: "Ask in plain English. The agent reads your data and takes real actions on it.",
-      icon: "02",
-    },
-    {
-      title: "Voice commands",
-      desc: "Mic-in, speaker-out. Search, update, and delete by talking. Chrome + Edge.",
-      icon: "03",
-    },
-    {
-      title: "Instant search",
-      desc: "Filter and search through your data with ⌘K command palette.",
-      icon: "04",
-    },
-    {
-      title: "Toast feedback",
-      desc: "Every action gets a confirmation. Errors, successes, and info, all in one place.",
-      icon: "05",
-    },
-    {
-      title: "Hackathon-ready",
-      desc: "One config file to swap branding, fields, and AI behavior. Ship in hours.",
-      icon: "06",
-    },
-  ];
-
-  const steps = [
-    { num: "01", title: "Edit one file", desc: "Change branding, fields, and AI prompts in `app/lib/config.ts`." },
-    { num: "02", title: "Add a table", desc: "Run the SQL schema in Supabase, or tweak it for your domain." },
-    { num: "03", title: "Ship it", desc: "Auth, CRUD, AI, and UI all adapt. Deploy to Vercel in minutes." },
-  ];
-
-  const useCases = [
-    "Inventory & stock tracking",
-    "Task & project boards",
-    "Recipe & meal planners",
-    "Bookmark managers",
-    "CRM & contact lists",
-    "Reading lists & notes",
-  ];
-
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -60,16 +14,16 @@ export default function Landing() {
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 text-center pt-14">
         <div className="animate-fadeInUp">
           <span className="text-fg text-[10px] tracking-[3px] uppercase font-mono border border-border bg-surface/60 rounded-full px-3 py-1 inline-block mb-7">
-            Next.js 16 + Supabase + AI
+            {pill}
           </span>
         </div>
         <h1 className="animate-fadeInUp delay-1 text-fg text-5xl sm:text-6xl md:text-7xl font-light tracking-tight mb-5 leading-[1.05]">
-          The {appConfig.entity.title.toLowerCase()} workspace
+          {appConfig.tagline}
           <br />
-          <span className="font-medium text-accent">that talks back.</span>
+          <span className="font-medium text-accent">{heroAccent}</span>
         </h1>
         <p className="animate-fadeInUp delay-2 text-muted text-base sm:text-lg max-w-[460px] mb-10 leading-relaxed">
-          Manage any kind of data with search, filters, and an AI agent that takes real actions. Built for hackathon speed, ready for production.
+          {appConfig.description}
         </p>
         <div className="animate-fadeInUp delay-3 flex flex-col sm:flex-row gap-3 w-full max-w-[320px]">
           <Link href="/signup" className="flex-1 bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-5 py-3.5 rounded-xl transition-all hover:scale-[1.02] text-center">
@@ -133,7 +87,7 @@ export default function Landing() {
             {features.map((f, i) => (
               <div key={f.title} className={`animate-fadeInUp delay-${Math.min(i + 1, 8)} bg-surface border border-border rounded-xl p-5 sm:p-6 hover:border-muted transition-all hover:-translate-y-0.5`}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-accent text-xs font-mono">{f.icon}</span>
+                  <span className="text-accent text-xs font-mono">0{i + 1}</span>
                   <span className="text-muted text-[10px] font-mono uppercase tracking-wider">Feature</span>
                 </div>
                 <h3 className="text-fg text-base font-medium mb-2">{f.title}</h3>
@@ -151,14 +105,14 @@ export default function Landing() {
             <h2 className="text-fg text-3xl sm:text-4xl font-light mt-3">Three steps to ship</h2>
           </div>
           <div className="grid sm:grid-cols-3 gap-4 sm:gap-6 relative">
-            {steps.map((s, i) => (
+            {howItWorks.map((s, i) => (
               <div key={s.num} className={`animate-fadeInUp delay-${Math.min(i * 2 + 1, 8)} relative`}>
                 <div className="bg-surface border border-border rounded-2xl p-6 sm:p-7 h-full">
                   <div className="text-accent text-3xl sm:text-4xl font-light font-mono mb-5">{s.num}</div>
                   <h3 className="text-fg text-lg font-medium mb-2">{s.title}</h3>
                   <p className="text-muted text-sm leading-relaxed">{s.desc}</p>
                 </div>
-                {i < steps.length - 1 && (
+                {i < howItWorks.length - 1 && (
                   <div className="hidden sm:block absolute top-1/2 -right-3 w-6 h-px bg-border" />
                 )}
               </div>

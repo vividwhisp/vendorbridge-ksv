@@ -113,10 +113,40 @@ const PRIMARY_TABLE: TableConfig = {
 export const appConfig = {
   // ---------- Branding ----------
   name: "DataHub",
+  tagline: "AI-powered data workspace",
   description: "Manage any data with search, filters, and an AI agent.",
 
   // Accent: drives the entire theme. See getAccentPalette() below.
   accent: "green" as ThemeName,
+
+  // ---------- Landing page copy ----------
+  // Every string the public landing page displays lives here.
+  // Edit this section to rebrand the marketing site in one place.
+  landing: {
+    pill: "Next.js 16 + Supabase + AI",
+    heroAccent: "that talks back.",
+    features: [
+      { title: "Real-time sync",   desc: "Live updates from Supabase with row-level security. Your data, isolated per user." },
+      { title: "AI agent",         desc: "Ask in plain English. The agent reads your data and takes real actions on it." },
+      { title: "Voice commands",   desc: "Mic-in, speaker-out. Search, update, and delete by talking. Chrome + Edge." },
+      { title: "Instant search",   desc: "Filter and search through your data with ⌘K command palette." },
+      { title: "Toast feedback",   desc: "Every action gets a confirmation. Errors, successes, and info, all in one place." },
+      { title: "Hackathon-ready",  desc: "One config file to swap branding, fields, and AI behavior. Ship in hours." },
+    ],
+    howItWorks: [
+      { num: "01", title: "Edit one file", desc: "Change branding, fields, and AI prompts in `app/lib/config.ts`." },
+      { num: "02", title: "Add a table",   desc: "Run the SQL schema in Supabase, or tweak it for your domain." },
+      { num: "03", title: "Ship it",       desc: "Auth, CRUD, AI, and UI all adapt. Deploy to Vercel in minutes." },
+    ],
+    useCases: [
+      "Inventory & stock tracking",
+      "Task & project boards",
+      "Recipe & meal planners",
+      "Bookmark managers",
+      "CRM & contact lists",
+      "Reading lists & notes",
+    ],
+  },
 
   // ---------- Tables ----------
   // First entry = primary table. The dashboard, AI agent, and form

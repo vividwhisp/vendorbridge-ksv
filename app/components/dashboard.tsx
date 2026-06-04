@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLog } from "../lib/log-context";
 import { useToast } from "../lib/toast-context";
+import { getSupabase } from "../lib/supabase-client";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
 import { appConfig, isLowStock, getTableById, getPrimaryTable, type TableConfig } from "../lib/config";
 import type { Row } from "../types";
@@ -31,6 +32,7 @@ export default function DashboardView() {
   const [adding, setAdding] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [live, setLive] = useState(false);
 
   const currentTable: TableConfig = getTableById(activeTableId) ?? getPrimaryTable();
 
@@ -59,6 +61,43 @@ export default function DashboardView() {
       setItems([]);
     });
     return load(activeTableId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTableId]);
+
+  useEffect(() => {
+    const tableName = currentTable.tableName ?? currentTable.id;
+    startTableTransition(() => {
+      setLive(false);
+    });
+    const channel = getSupabase()
+      .channel(`changes-${activeTableId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: tableName },
+        (payload) => {
+          log("REALTIME", `${payload.eventType} on ${tableName}`);
+          apiGetAll(activeTableId)
+            .then((data) => {
+              setItems(data);
+              log("REALTIME", `Synced ${data.length} items`, true);
+            })
+            .catch((err: unknown) => {
+              log("REALTIME", `Sync failed: ${err instanceof Error ? err.message : "Error"}`, false, true);
+            });
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          startTableTransition(() => {
+            setLive(true);
+          });
+          log("REALTIME", `Live sync active for ${tableName}`, true);
+        }
+      });
+
+    return () => {
+      getSupabase().removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTableId]);
 
@@ -215,6 +254,12 @@ export default function DashboardView() {
             <div className="flex items-center gap-2 text-fg text-sm font-semibold">
               <span className="text-accent">&#9632;</span>
               <span>{currentTable.entity.title}</span>
+              {live && (
+                <span className="flex items-center gap-1 text-[9px] font-mono text-accent bg-ok-bg border border-ok-border rounded px-1.5 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                  LIVE
+                </span>
+              )}
             </div>
             <p className="text-muted text-[10px] font-mono mt-1">{items.length} {currentTable.entity.plural}</p>
           </div>
