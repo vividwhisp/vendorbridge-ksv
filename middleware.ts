@@ -5,23 +5,35 @@ import { normalizeRole, ROLE_HEADER } from "./app/lib/rbac";
 const PROTECTED_PREFIXES = ["/dashboard", "/settings", "/profile", "/api/me"];
 const ADMIN_API_PREFIXES = ["/api/[table]"];
 
-const COOKIE_NAMES = [
-  "sb-access-token",
-  "supabase-auth-token",
-  "sb127-auth-token",
-];
-
 function readAccessToken(request: NextRequest): string | null {
   const auth = request.headers.get("authorization");
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  for (const name of COOKIE_NAMES) {
-    const v = request.cookies.get(name)?.value;
-    if (!v) continue;
-    try {
-      const parsed = JSON.parse(v) as { access_token?: string };
-      if (parsed.access_token) return parsed.access_token;
-    } catch {
-      return v;
+
+  const queryToken = request.nextUrl.searchParams.get("access_token");
+  if (queryToken) return queryToken;
+
+  for (const { name, value } of request.cookies.getAll()) {
+    if (name === "sb-access-token" && value) {
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
+    if (/^sb-.+-auth-token$/.test(name) && value) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(value)) as {
+          access_token?: string;
+        };
+        if (parsed.access_token) return parsed.access_token;
+      } catch {
+        try {
+          const parsed = JSON.parse(value) as { access_token?: string };
+          if (parsed.access_token) return parsed.access_token;
+        } catch {
+          return value;
+        }
+      }
     }
   }
   return null;
