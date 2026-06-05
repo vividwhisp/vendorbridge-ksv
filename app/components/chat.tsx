@@ -6,23 +6,8 @@ import { appConfig, type TableConfig } from "../lib/config";
 import { hasWorkflow } from "../lib/workflow";
 import { canDelete, canEdit, type Role } from "../lib/rbac";
 import { buildAgentPrompt } from "../lib/ai/prompts";
-import type { LogFn, Row } from "../types";
-
-type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
-type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike> };
-type SpeechRecognitionLike = {
-  lang: string; interimResults: boolean; continuous: boolean;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onend: (() => void) | null; onerror: (() => void) | null;
-  start: () => void; stop: () => void;
-};
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-type AgentAction = {
-  action: "update_stock" | "delete_item" | "add_item" | "update_status" | "query";
-  productId?: number; newQuantity?: number; newStatus?: string;
-  [key: string]: unknown;
-};
+import type { AgentAction } from "../lib/ai";
+import type { Row } from "../types";
 
 type AgentResponse = {
   actions: AgentAction[];
@@ -35,7 +20,6 @@ type ChatProps = {
   items: Row[];
   table: TableConfig;
   onItemsChange: (items: Row[]) => void;
-  log: LogFn;
   onClose: () => void;
   role?: Role;
 };
@@ -59,96 +43,35 @@ function buildAgentSystem(items: Row[], table: TableConfig) {
   });
 }
 
-export default function Chat({ items, table, onItemsChange, log, onClose, role = "user" }: ChatProps) {
+export default function Chat({ items, table, onItemsChange, onClose, role = "user" }: ChatProps) {
   const [msgs, setMsgs] = useState<Message[]>([
     { role: "ai", text: appConfig.ai.welcome },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  useEffect(() => {
-    panelRef.current?.classList.remove("animate-fadeInUp");
-    void panelRef.current?.offsetWidth;
-    panelRef.current?.classList.add("animate-fadeInUp");
-  }, []);
-
-  function speak(text: string) {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-  }
-
-  function stopSpeak() { window.speechSynthesis?.cancel(); setSpeaking(false); }
-
-  function startListen() {
-    const W = window as Window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor; };
-    const Recognition = W.SpeechRecognition || W.webkitSpeechRecognition;
-    if (!Recognition) { alert("Use Chrome or Edge for voice."); return; }
-    const recognition = new Recognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recRef.current = recognition;
-    setListening(true);
-    recognition.onresult = (event) => { setInput(Array.from(event.results).map((r) => r[0].transcript).join("")); };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognition.start();
-  }
-
-  function stopListen() { recRef.current?.stop(); setListening(false); }
-
   async function executeActions(actions: AgentAction[]) {
     for (const act of actions) {
-      if (!canEdit(role) && act.action !== "query") {
-        log("AGENT", `Skipped ${act.action}: role "${role}" lacks edit permission`);
-        continue;
-      }
-      if (!canDelete(role) && act.action === "delete_item") {
-        log("AGENT", `Skipped delete_item: role "${role}" lacks delete permission`);
-        continue;
-      }
+      if (!canEdit(role) && act.action !== "query") continue;
+      if (!canDelete(role) && act.action === "delete_item") continue;
       if (act.action === "update_stock" && act.productId && typeof act.newQuantity === "number") {
-        log("AGENT", `UPDATE ${table.tableName ?? table.id} SET ${table.lowStockField ?? "quantity"}=${act.newQuantity} WHERE id=${act.productId}`);
-        log("API", `PUT /api/${table.id}/${act.productId}`);
         await apiUpdate(table.id, act.productId, { [table.lowStockField ?? "quantity"]: act.newQuantity });
-        log("API", `Updated: item ${act.productId} -> ${act.newQuantity}`, true);
       } else if (act.action === "delete_item" && act.productId) {
-        log("AGENT", `DELETE FROM ${table.tableName ?? table.id} WHERE id=${act.productId}`);
-        log("API", `DELETE /api/${table.id}/${act.productId}`);
         await apiRemove(table.id, act.productId);
-        log("API", `Item ${act.productId} deleted`, true);
       } else if (act.action === "add_item" && act.name) {
         const insertable: Record<string, unknown> = {};
         for (const f of table.fields) {
           if (act[f.key] !== undefined) insertable[f.key] = act[f.key];
         }
-        log("AGENT", `INSERT INTO ${table.tableName ?? table.id} (${Object.keys(insertable).join(", ")})`);
-        log("API", `POST /api/${table.id}`);
         await apiInsert(table.id, insertable);
-        log("API", `Item "${act.name}" added`, true);
       } else if (act.action === "update_status" && act.productId && typeof act.newStatus === "string") {
-        if (!hasWorkflow(table) || !table.workflow!.includes(act.newStatus)) {
-          log("AGENT", `Skipped update_status: "${act.newStatus}" is not a valid state`);
-          continue;
-        }
-        log("AGENT", `UPDATE ${table.tableName ?? table.id} SET status='${act.newStatus}' WHERE id=${act.productId}`);
-        log("API", `PUT /api/${table.id}/${act.productId}`);
+        if (!hasWorkflow(table) || !table.workflow!.includes(act.newStatus)) continue;
         await apiUpdate(table.id, act.productId, { status: act.newStatus });
-        log("API", `Item ${act.productId} -> status=${act.newStatus}`, true);
       }
     }
   }
@@ -160,22 +83,19 @@ export default function Chat({ items, table, onItemsChange, log, onClose, role =
     setMsgs((prev) => [...prev, { role: "user", text: q }]);
     setBusy(true);
 
-    log("LLM", `User: ${q}`);
-    log("AGENT", "Analyzing intent...");
-    log("API", `POST /api/chat -> ${items.length} items in context (table: ${table.id})`);
-
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system: buildAgentSystem(items, table), messages: [{ role: "user", content: q }] }),
+        body: JSON.stringify({
+          system: buildAgentSystem(items, table),
+          messages: [{ role: "user", content: q }],
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "AI request failed");
 
       const raw = data?.message || "";
-      log("LLM", `Raw response: ${raw.substring(0, 200)}`, true);
-
       let parsed: AgentResponse;
       try {
         parsed = JSON.parse(raw) as AgentResponse;
@@ -184,23 +104,15 @@ export default function Chat({ items, table, onItemsChange, log, onClose, role =
         parsed = { actions: [], message: raw };
       }
 
-      log("LLM", `${parsed.actions.length} action(s) detected`, true);
-
       if (parsed.actions.length > 0) {
         await executeActions(parsed.actions);
         const fresh = await apiGetAll(table.id);
         onItemsChange(fresh);
-      } else {
-        log("AGENT", "Query only - no DB action needed");
       }
 
-      const reply = parsed.message || "Done!";
-      log("UI", "Rendering agent response", true);
-      setMsgs((prev) => [...prev, { role: "ai", text: reply, actions: parsed.actions }]);
-      speak(reply);
-    } catch (error) {
+      setMsgs((prev) => [...prev, { role: "ai", text: parsed.message || "Done!", actions: parsed.actions }]);
+    } catch {
       setMsgs((prev) => [...prev, { role: "ai", text: "Error - try again." }]);
-      log("LLM", `Error: ${error instanceof Error ? error.message : "Unknown error"}`, false, true);
     }
     setBusy(false);
   }
@@ -208,10 +120,10 @@ export default function Chat({ items, table, onItemsChange, log, onClose, role =
   const tips = appConfig.ai.suggestions;
 
   return (
-    <div ref={panelRef} className="fixed bottom-20 right-5 w-[calc(100vw-2.5rem)] sm:w-[330px] h-[460px] bg-surface border border-border rounded-xl flex flex-col z-50 shadow-2xl">
+    <div className="fixed bottom-20 right-5 w-[calc(100vw-2.5rem)] sm:w-[330px] h-[460px] bg-surface border border-border rounded-xl flex flex-col z-50 shadow-2xl animate-fadeInUp">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${speaking ? "bg-accent shadow-[0_0_8px_var(--accent-glow)]" : "bg-muted"}`} />
+          <div className="w-2 h-2 rounded-full bg-muted" />
           <span className="text-fg text-sm font-medium">{appConfig.ai.name}</span>
           <span className="text-muted text-[10px] font-mono">openrouter</span>
         </div>
@@ -258,11 +170,7 @@ export default function Chat({ items, table, onItemsChange, log, onClose, role =
       )}
 
       <div className="flex items-center gap-1.5 px-3 py-2.5 border-t border-border">
-        <button onClick={listening ? stopListen : startListen} className={`w-8 h-8 rounded-lg border flex items-center justify-center text-[10px] flex-shrink-0 transition-colors ${listening ? "bg-danger border-danger text-fg animate-pulse" : "bg-bg border-border text-muted hover:border-muted"}`}>
-          {listening ? "stop" : "mic"}
-        </button>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder={listening ? "Listening..." : "Type or speak a command..."} className={`flex-1 bg-bg border rounded-lg px-3 py-1.5 text-fg text-xs outline-none transition-colors ${listening ? "border-danger" : "border-surface focus:border-muted"}`} />
-        {speaking && <button onClick={stopSpeak} className="w-8 h-8 rounded-lg bg-accent text-bg text-[10px] flex items-center justify-center flex-shrink-0 transition-colors hover:bg-accent-hover">mute</button>}
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder="Ask the AI agent..." className="flex-1 bg-bg border border-surface focus:border-muted rounded-lg px-3 py-1.5 text-fg text-xs outline-none transition-colors" />
         <button onClick={() => ask()} disabled={busy || !input.trim()} className="w-8 h-8 bg-accent hover:bg-accent-hover disabled:opacity-40 rounded-lg text-bg text-sm flex items-center justify-center flex-shrink-0 transition-colors">&uarr;</button>
       </div>
     </div>

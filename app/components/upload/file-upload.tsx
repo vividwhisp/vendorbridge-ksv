@@ -2,13 +2,13 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useToast } from "../../lib/toast-context";
-import { useLog } from "../../lib/log-context";
-import { ACCEPT_STRING, uploadFile, isImageUrl, type FileCategory } from "../../lib/storage";
+import { ACCEPT_STRING, uploadFile, isImageUrl } from "../../lib/storage";
 import Spin from "../spin";
 
 type Props = {
   value?: string;
   onChange: (url: string | undefined) => void;
+  onUploadingChange?: (uploading: boolean) => void;
   tableId: string;
   label?: string;
   disabled?: boolean;
@@ -17,15 +17,14 @@ type Props = {
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading" }
-  | { kind: "done"; url: string; category: FileCategory }
+  | { kind: "done"; url: string }
   | { kind: "error"; message: string };
 
-export function FileUpload({ value, onChange, tableId, label = "Upload", disabled }: Props) {
+export function FileUpload({ value, onChange, onUploadingChange, tableId, label = "Upload", disabled }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [state, setState] = useState<UploadState>({ kind: "idle" });
   const [isPending, startTransition] = useTransition();
   const { showToast } = useToast();
-  const { log } = useLog();
   const current = state.kind === "done" ? state.url : value;
   const busy = isPending || state.kind === "uploading";
 
@@ -36,18 +35,18 @@ export function FileUpload({ value, onChange, tableId, label = "Upload", disable
 
   function handleFile(file: File) {
     setState({ kind: "uploading" });
-    log("STORAGE", `Uploading ${file.name} (${(file.size / 1024).toFixed(1)}KB) -> ${tableId}`);
+    onUploadingChange?.(true);
     startTransition(async () => {
       const res = await uploadFile(file, { tableId });
       if (!res.ok) {
         setState({ kind: "error", message: res.error });
-        log("STORAGE", `Upload failed: ${res.error}`, false, true);
-        showToast(res.error, "error");
+        showToast(`Upload failed: ${res.error}`, "error");
+        onUploadingChange?.(false);
         return;
       }
-      setState({ kind: "done", url: res.url, category: res.category });
-      log("STORAGE", `Uploaded: ${res.path}`, true);
+      setState({ kind: "done", url: res.url });
       onChange(res.url);
+      onUploadingChange?.(false);
     });
   }
 
@@ -104,7 +103,7 @@ export function FileUpload({ value, onChange, tableId, label = "Upload", disable
       </div>
       {!current && !busy && (
         <p className="text-muted text-[10px]">
-          Images, PDFs, or docs up to 10MB
+          Images and PDFs up to 10MB
         </p>
       )}
       {isImageUrl(current) ? (

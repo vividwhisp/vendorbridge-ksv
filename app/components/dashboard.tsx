@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useLog } from "../lib/log-context";
 import { useToast } from "../lib/toast-context";
 import { getSupabase } from "../lib/supabase-client";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
@@ -11,9 +10,7 @@ import { hasWorkflow, countByState, formatStateLabel } from "../lib/workflow";
 import { StatusBadge, StatusDropdown } from "./workflow";
 import Navbar from "./navbar";
 import Chat from "./chat";
-import CommandPalette from "./command-palette";
 import EditModal from "./edit-modal";
-import LogPanel from "./log-panel";
 import Spin from "./spin";
 import { BarChartView, type BarDatum } from "./charts/bar-chart";
 import { PieChartView, type PieDatum } from "./charts/pie-chart";
@@ -22,7 +19,6 @@ import { Can } from "./role";
 import { useUserRole } from "../lib/role-context";
 
 export default function DashboardView() {
-  const { log, logs, clearLogs } = useLog();
   const { showToast } = useToast();
   const [activeTableId, setActiveTableId] = useState<string>(getPrimaryTable().id);
   const [items, setItems] = useState<Row[]>([]);
@@ -32,12 +28,10 @@ export default function DashboardView() {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<Row | null>(null);
   const [showChat, setShowChat] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [live, setLive] = useState(false);
 
   const currentTable: TableConfig = getTableById(activeTableId) ?? getPrimaryTable();
   const useWorkflow = hasWorkflow(currentTable);
@@ -45,68 +39,44 @@ export default function DashboardView() {
 
   const [, startTableTransition] = useTransition();
 
-  function load(id: string) {
-    let cancelled = false;
-    apiGetAll(id)
-      .then((data) => {
-        if (cancelled) return;
-        setItems(data);
-        setLoading(false);
-        log("API", `GET /api/${id} -> ${data.length} items`, true);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        log("API", `GET /api/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }
-
   useEffect(() => {
+    let cancelled = false;
     startTableTransition(() => {
       setLoading(true);
       setItems([]);
     });
-    return load(activeTableId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    apiGetAll(activeTableId)
+      .then((data) => {
+        if (cancelled) return;
+        setItems(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [activeTableId]);
 
   useEffect(() => {
     const tableName = currentTable.tableName ?? currentTable.id;
-    startTableTransition(() => {
-      setLive(false);
-    });
     const channel = getSupabase()
       .channel(`changes-${activeTableId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: tableName },
-        (payload) => {
-          log("REALTIME", `${payload.eventType} on ${tableName}`);
+        () => {
           apiGetAll(activeTableId)
-            .then((data) => {
-              setItems(data);
-              log("REALTIME", `Synced ${data.length} items`, true);
-            })
-            .catch((err: unknown) => {
-              log("REALTIME", `Sync failed: ${err instanceof Error ? err.message : "Error"}`, false, true);
-            });
+            .then((data) => setItems(data))
+            .catch(() => {});
         }
       )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          startTableTransition(() => {
-            setLive(true);
-          });
-          log("REALTIME", `Live sync active for ${tableName}`, true);
-        }
-      });
+      .subscribe();
 
     return () => {
       getSupabase().removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTableId]);
+  }, [activeTableId, currentTable]);
 
   function switchTable(id: string) {
     if (id === activeTableId) return;
@@ -116,10 +86,8 @@ export default function DashboardView() {
     setShowForm(false);
     setEditItem(null);
     setActiveTableId(id);
-    log("UI", `Switched to table: ${id}`);
   }
 
-  // Derived: filter pill list — workflow states OR the legacy stock pair.
   const filterPills: { key: string; label: string }[] = useWorkflow
     ? (currentTable.workflow ?? []).map((s) => ({ key: s, label: s }))
     : [
@@ -135,7 +103,6 @@ export default function DashboardView() {
       return;
     }
     setAdding(true);
-    log("API", `POST /api/${currentTable.id}`);
     try {
       const payload: Record<string, unknown> = {};
       for (const f of currentTable.fields) {
@@ -144,60 +111,53 @@ export default function DashboardView() {
         payload[f.key] = f.type === "number" ? Number(v) : v;
       }
       const row = await apiInsert(currentTable.id, payload);
-      log("API", `POST /api/${currentTable.id} -> id:${row.id}`, true);
       setItems((prev) => [...prev, row]);
       setForm({});
       setShowForm(false);
       showToast(`Created ${currentTable.entity.name} "${row.name}"`, "success");
     } catch (error) {
-      log("API", `POST /api/${currentTable.id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
-      showToast("Could not create item", "error");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      showToast(`Could not create: ${message}`, "error");
     } finally { setAdding(false); }
   }
 
   async function save(id: number, data: Row) {
-    log("API", `PUT /api/${currentTable.id}/${id}`);
     try {
       const updated = await apiUpdate(currentTable.id, id, data);
-      log("API", `PUT /api/${currentTable.id}/${id} -> ok`, true);
       setItems((prev) => prev.map((item) => (Number(item.id) === id ? updated : item)));
       setEditItem(null);
       showToast("Updated", "success");
     } catch (error) {
-      log("API", `PUT /api/${currentTable.id}/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
-      showToast("Could not update", "error");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      showToast(`Update failed: ${message}`, "error");
+      throw error;
     }
   }
 
   async function del(id: number) {
     setDeleting(id);
-    log("API", `DELETE /api/${currentTable.id}/${id}`);
     try {
       await apiRemove(currentTable.id, id);
-      log("API", `DELETE /api/${currentTable.id}/${id} -> ok`, true);
       setItems((prev) => prev.filter((item) => Number(item.id) !== id));
       showToast("Deleted", "success");
     } catch (error) {
-      log("API", `DELETE /api/${currentTable.id}/${id} -> ${error instanceof Error ? error.message : "Error"}`, false, true);
-      showToast("Could not delete", "error");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      showToast(`Delete failed: ${message}`, "error");
     } finally { setDeleting(null); }
   }
 
   async function seedSamples() {
     setSeeding(true);
-    log("API", `POST /api/${currentTable.id}/seed`);
     try {
       const rows = await apiSeed(currentTable.id);
-      log("API", `POST /api/${currentTable.id}/seed -> ${rows.length} items`, true);
       setItems((prev) => [...prev, ...rows]);
       showToast(`Loaded ${rows.length} sample ${currentTable.entity.plural}`, "success");
     } catch (error) {
-      log("API", `POST /api/${currentTable.id}/seed -> ${error instanceof Error ? error.message : "Error"}`, false, true);
-      showToast("Could not load samples", "error");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      showToast(`Could not load samples: ${message}`, "error");
     } finally { setSeeding(false); }
   }
 
-  // ---- Derived stats + chart data ----
   const lowCount = items.filter((it) => isLowStock(it, currentTable)).length;
   const okCount = items.length - lowCount;
   const stateCounts = useMemo(
@@ -233,7 +193,6 @@ export default function DashboardView() {
   }
   stats.push({ label: "Filtered", value: String(filtered.length) });
 
-  // Chart data: distribution by first non-name non-numeric field (categorical)
   const categoricalField = currentTable.fields.find((f) => f.key !== "name" && f.type !== "number");
   const categoryChart: BarDatum[] = useMemo(() => {
     if (!categoricalField) return [];
@@ -261,7 +220,6 @@ export default function DashboardView() {
     ];
   }, [useWorkflow, currentTable, stateCounts, okCount, lowCount]);
 
-  // ---- Render ----
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -295,12 +253,6 @@ export default function DashboardView() {
             <div className="flex items-center gap-2 text-fg text-sm font-semibold">
               <span className="text-accent">&#9632;</span>
               <span>{currentTable.entity.title}</span>
-              {live && (
-                <span className="flex items-center gap-1 text-[9px] font-mono text-accent bg-ok-bg border border-ok-border rounded px-1.5 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                  LIVE
-                </span>
-              )}
             </div>
             <p className="text-muted text-[10px] font-mono mt-1">{items.length} {currentTable.entity.plural}</p>
           </div>
@@ -308,23 +260,16 @@ export default function DashboardView() {
             {filterPills.map((pill) => (
               <button
                 key={pill.key}
-                onClick={() => { setFilter(pill.key); log("UI", `Filter: ${pill.key}`); }}
+                onClick={() => setFilter(pill.key)}
                 className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${filter === pill.key ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
               >
                 {pill.label}
               </button>
             ))}
-            <div className="border-t border-border my-2" />
-            <button
-              onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
-              className={`text-left text-sm rounded-md px-3 py-2 transition-colors ${showLogs ? "bg-accent/10 text-accent" : "text-muted hover:text-fg hover:bg-border/40"}`}
-            >
-              {showLogs ? "Hide logs" : "Show logs"}
-            </button>
           </nav>
         </aside>
 
-        <main className={`flex-1 min-w-0 transition-all duration-200 ${showLogs ? "lg:max-w-[calc(100%-300px)]" : ""}`}>
+        <main className="flex-1 min-w-0">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
               {stats.map((s, i) => (
@@ -361,7 +306,7 @@ export default function DashboardView() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs pointer-events-none">&#x1F50D;</span>
                 <input
                   value={search}
-                  onChange={(e) => { setSearch(e.target.value); log("UI", `Search: "${e.target.value}"`); }}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder={`Search ${currentTable.entity.plural}...`}
                   className="w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-fg text-sm outline-none focus:border-muted transition-colors"
                 />
@@ -370,19 +315,13 @@ export default function DashboardView() {
                 {filterPills.map((pill) => (
                   <button
                     key={pill.key}
-                    onClick={() => { setFilter(pill.key); log("UI", `Filter: ${pill.key}`); }}
+                    onClick={() => setFilter(pill.key)}
                     className={`text-xs rounded-md px-3 py-2 border transition-colors ${filter === pill.key ? "bg-accent text-bg border-accent" : "bg-transparent text-muted border-border hover:border-muted hover:text-fg"}`}
                   >
                     {pill.label}
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => { setShowLogs((prev) => !prev); log("UI", showLogs ? "Logs closed" : "Logs opened"); }}
-                className={`lg:hidden text-xs rounded-md px-2.5 py-2 border transition-colors ${showLogs ? "bg-accent/10 text-accent border-accent/30" : "text-muted border-border hover:text-fg hover:border-muted"}`}
-              >
-                Logs
-              </button>
               <Can action="edit">
                 <button
                   onClick={() => setShowForm((prev) => !prev)}
@@ -526,7 +465,7 @@ export default function DashboardView() {
                           </Can>
                         )}
                         <Can action="edit">
-                          <button onClick={() => { setEditItem(item); log("UI", `Edit modal opened for "${name}"`); }} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
+                          <button onClick={() => setEditItem(item)} className="border border-border text-muted hover:text-fg hover:border-muted rounded-md px-2.5 py-1 text-xs transition-colors">
                             Edit
                           </button>
                         </Can>
@@ -543,12 +482,6 @@ export default function DashboardView() {
             )}
           </div>
         </main>
-
-        {showLogs && (
-          <div className="hidden lg:block w-[300px] border-l border-border animate-slideInRight">
-            <LogPanel logs={logs} onClear={clearLogs} />
-          </div>
-        )}
       </div>
 
       {editItem && (
@@ -561,7 +494,7 @@ export default function DashboardView() {
       )}
 
       <button
-        onClick={() => { setShowChat((prev) => !prev); log("UI", showChat ? "Chat closed" : "AI Agent opened"); }}
+        onClick={() => setShowChat((prev) => !prev)}
         className={`fixed bottom-5 right-5 w-11 h-11 rounded-full border text-xs font-semibold transition-all z-50 flex items-center justify-center shadow-lg hover:scale-105 ${showChat ? "bg-surface border-border text-muted" : "bg-accent hover:bg-accent-hover border-accent text-bg"}`}
       >
         {showChat ? "\u00D7" : "AI"}
@@ -572,18 +505,10 @@ export default function DashboardView() {
           items={items}
           table={currentTable}
           onItemsChange={setItems}
-          log={log}
           onClose={() => setShowChat(false)}
           role={currentRole}
         />
       )}
-
-      <CommandPalette
-        items={items}
-        table={currentTable}
-        onAdd={() => setShowForm(true)}
-        onAI={() => setShowChat((s) => !s)}
-      />
     </div>
   );
 }

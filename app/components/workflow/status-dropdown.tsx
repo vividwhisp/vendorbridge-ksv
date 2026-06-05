@@ -5,7 +5,6 @@ import type { TableConfig } from "../../lib/config";
 import type { Row } from "../../types";
 import { apiUpdate } from "../../lib/api-helper";
 import { useToast } from "../../lib/toast-context";
-import { useLog } from "../../lib/log-context";
 import { getStateColor } from "../../lib/workflow";
 
 type Props = {
@@ -20,7 +19,6 @@ export function StatusDropdown({ item, table, onUpdated }: Props) {
   const [value, setValue] = useState(currentState);
   const [isPending, startTransition] = useTransition();
   const { showToast } = useToast();
-  const { log } = useLog();
   const id = Number(item.id);
 
   if (states.length === 0) return null;
@@ -33,13 +31,11 @@ export function StatusDropdown({ item, table, onUpdated }: Props) {
     startTransition(async () => {
       try {
         const updated = await apiUpdate(table.id, id, { status: next });
-        log("WORKFLOW", `Status: ${prev} → ${next}`, true);
         onUpdated?.(updated);
       } catch (err) {
         setValue(prev);
         const msg = err instanceof Error ? err.message : "Status update failed";
         showToast(msg, "error");
-        log("WORKFLOW", `Status update failed: ${msg}`, false, true);
       }
     });
   };

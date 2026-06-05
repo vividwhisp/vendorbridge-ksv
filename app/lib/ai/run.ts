@@ -12,7 +12,6 @@ export type RunTaskOptions<T> = {
   parse: ParseFn<T>;
   schemaHint?: string;
   retries?: number;
-  providerName?: string;
 };
 
 const RETRY_BASE_MS = 350;
@@ -96,21 +95,4 @@ export async function runTask<T>(opts: RunTaskOptions<T>): Promise<Result<T>> {
     error: "AI returned a response that could not be parsed as the expected JSON.",
     raw: lastRaw,
   };
-}
-
-export async function runText(system: string, user: string): Promise<Result<string>> {
-  const provider = getProvider();
-  const messages: ChatMessage[] = [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
-  try {
-    const raw = await provider.complete(messages);
-    return { ok: true, data: raw, raw };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "AI request failed",
-    };
-  }
 }

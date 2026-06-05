@@ -52,8 +52,7 @@ export default function Navbar() {
         {!loading && user ? (
           <nav className="hidden sm:flex items-center gap-0.5">
             <Link href="/dashboard" className={linkClass}>{appConfig.entity.title}</Link>
-            <Link href="/settings" className={linkClass}>Settings</Link>
-            <Link href="/profile" className={linkClass}>Profile</Link>
+            <Link href="/account" className={linkClass}>Account</Link>
           </nav>
         ) : !loading ? (
           <nav className="hidden sm:flex items-center gap-5">
@@ -98,8 +97,7 @@ export default function Navbar() {
             {!loading && user ? (
               <>
                 <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm py-2">{appConfig.entity.title}</Link>
-                <Link href="/settings" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm py-2">Settings</Link>
-                <Link href="/profile" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm py-2">Profile</Link>
+                <Link href="/account" onClick={() => setMenuOpen(false)} className="text-muted hover:text-fg text-sm py-2">Account</Link>
                 <div className="border-t border-border my-1" />
                 <span className="text-muted text-xs py-1">{user.email}</span>
                 <button onClick={() => { setMenuOpen(false); logout(); }} className="text-left text-danger text-sm py-2">Sign out</button>

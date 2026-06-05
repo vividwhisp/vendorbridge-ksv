@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeRole, ROLE_HEADER } from "./app/lib/rbac";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/settings", "/profile", "/api/me"];
+const PROTECTED_PREFIXES = ["/dashboard", "/account", "/api/me"];
 const ADMIN_API_PREFIXES = ["/api/[table]"];
 
 function readAccessToken(request: NextRequest): string | null {
@@ -49,7 +49,7 @@ function getSupabaseForToken(token: string) {
   });
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isProtected = PROTECTED_PREFIXES.some((p) => path.startsWith(p));
   const isWriteApi =

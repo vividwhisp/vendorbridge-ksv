@@ -10,18 +10,11 @@ export type AIProvider = {
   complete(messages: ChatMessage[]): Promise<string>;
 };
 
-function readEnv(name: string, fallback?: string): string {
-  const v = process.env[name];
-  if (v && v.length > 0) return v;
-  if (fallback !== undefined) return fallback;
-  return "";
-}
-
 function openRouterProvider(): AIProvider {
-  const apiKey = readEnv("OPENROUTER_API_KEY");
-  const model = readEnv("OPENROUTER_MODEL", "openrouter/free");
-  const referer = readEnv("OPENROUTER_REFERER", "http://localhost:3000");
-  const title = readEnv("OPENROUTER_TITLE", "DataHub");
+  const apiKey = process.env.OPENROUTER_API_KEY ?? "";
+  const model = process.env.OPENROUTER_MODEL ?? "openrouter/free";
+  const referer = process.env.OPENROUTER_REFERER ?? "http://localhost:3000";
+  const title = process.env.OPENROUTER_TITLE ?? "DataHub";
 
   return {
     name: `openrouter:${model}`,
@@ -56,24 +49,8 @@ function openRouterProvider(): AIProvider {
 function mockProvider(): AIProvider {
   return {
     name: "mock",
-    async complete(messages: ChatMessage[]): Promise<string> {
-      const last = messages[messages.length - 1]?.content ?? "";
-      if (last.includes("summarize")) {
-        return JSON.stringify({ summary: "Mock summary: " + last.slice(0, 60) });
-      }
-      if (last.includes("classifier")) {
-        return JSON.stringify({ category: null, confidence: 0 });
-      }
-      if (last.includes("triaging")) {
-        return JSON.stringify({ priority: "medium", reason: "Mock priority" });
-      }
-      if (last.includes("recommendation engine")) {
-        return JSON.stringify({ recommendations: [] });
-      }
-      if (last.includes("data analyst")) {
-        return JSON.stringify({ insights: [] });
-      }
-      return JSON.stringify({ actions: [], message: "Mock agent reply" });
+    async complete(): Promise<string> {
+      return JSON.stringify({ actions: [], message: "Mock agent reply (set OPENROUTER_API_KEY to use a real model)" });
     },
   };
 }

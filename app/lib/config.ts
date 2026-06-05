@@ -1,32 +1,14 @@
-// =============================================================
-//  ★ SINGLE SOURCE OF TRUTH FOR THE STARTER  ★
-// =============================================================
-//  To adapt this starter to a new problem statement, edit ONLY
-//  this file (and optionally the Supabase SQL schema).
-//
-//  - Change `accent` to swap the entire color theme.
-//  - Add/remove/reorder entries in `tables` to support multiple
-//    entities. The first table is shown by default; the rest are
-//    accessible from the dashboard's sidebar table picker.
-//  - Each table has its own entity, fields, search behavior,
-//    low-stock logic, and sample data.
-// =============================================================
-
 export type FieldDef = {
   key: string;
   label: string;
-  type: "text" | "number" | "textarea" | "select" | "file";
+  type: "text" | "number" | "file";
   required?: boolean;
   placeholder?: string;
 };
 
 export type TableConfig = {
-  // URL segment used by /api/[id] and as the table picker key.
-  // Must be unique and URL-safe.
   id: string;
-  // Actual Postgres table name. Defaults to `id` if omitted.
   tableName?: string;
-  // Display + data shape
   entity: {
     name: string;
     plural: string;
@@ -34,27 +16,15 @@ export type TableConfig = {
   };
   fields: readonly FieldDef[];
   searchFields: readonly string[];
-  // Drives the red dot + low-stock filter. Omit if not applicable.
   lowStockField?: string;
   lowStockThreshold?: number;
-  // Optional workflow: ordered list of states this entity moves through.
-  // If set, the matching Postgres table must have a `status` text column
-  // (defaulted to the first state). The dashboard auto-derives stats,
-  // a "By status" bar chart, and a status dropdown per row.
   workflow?: readonly string[];
-  // Optional: per-table sample data for the "Load samples" button
   samples: readonly Record<string, string | number>[];
 };
 
-// =============================================================
-//  Tables — declare every entity your app manages here.
-// =============================================================
-//  The first table is the "primary" one. Legacy `appConfig.entity`,
-//  `appConfig.fields`, etc. mirror this table for backwards compat.
-// =============================================================
 const PRIMARY_TABLE: TableConfig = {
   id: "items",
-  tableName: "products",  // legacy: keep DB name as "products"
+  tableName: "products",
   entity: {
     name: "item",
     plural: "items",
@@ -81,45 +51,24 @@ const PRIMARY_TABLE: TableConfig = {
   ],
 };
 
-// Add more tables here as your problem statement demands.
-// Example: a "tickets" table for a helpdesk problem.
-//
-// const TICKETS_TABLE: TableConfig = {
-//   id: "tickets",
-//   entity: { name: "ticket", plural: "tickets", title: "Tickets" },
-//   fields: [
-//     { key: "title",    label: "Title",    type: "text",     required: true },
-//     { key: "priority", label: "Priority", type: "select",   required: true },
-//     { key: "notes",    label: "Notes",    type: "textarea" },
-//   ],
-//   searchFields: ["title", "notes"],
-//   workflow: ["Submitted", "Approved", "Assigned", "Resolved"],
-//   samples: [
-//     { title: "Login broken", priority: "High", status: "Submitted" },
-//   ],
-// };
-
 export const appConfig = {
-  // ---------- Branding ----------
   name: "DataHub",
   tagline: "AI-powered data workspace",
   description: "Manage any data with search, filters, and an AI agent.",
 
-  // Accent: drives the entire theme. See getAccentPalette() below.
-  accent: "blue" as ThemeName,
+  accent: "green" as ThemeName,
 
-  // ---------- Landing page copy ----------
-  // Every string the public landing page displays lives here.
-  // Edit this section to rebrand the marketing site in one place.
   landing: {
     pill: "Next.js 16 + Supabase + AI",
     heroAccent: "that talks back.",
     features: [
       { title: "Real-time sync",   desc: "Live updates from Supabase with row-level security. Your data, isolated per user." },
       { title: "AI agent",         desc: "Ask in plain English. The agent reads your data and takes real actions on it." },
-      { title: "Voice commands",   desc: "Mic-in, speaker-out. Search, update, and delete by talking. Chrome + Edge." },
-      { title: "Instant search",   desc: "Filter and search through your data with ⌘K command palette." },
+      { title: "Instant search",   desc: "Filter and search through your data as you type." },
       { title: "Toast feedback",   desc: "Every action gets a confirmation. Errors, successes, and info, all in one place." },
+      { title: "Workflow status",  desc: "Per-table lifecycle states. The dashboard adapts automatically." },
+      { title: "File uploads",     desc: "Drop an image or PDF on any record. Stored in your Supabase bucket." },
+      { title: "Role-based access", desc: "Admin vs user permissions enforced at the edge. Add roles in 3 lines." },
       { title: "Hackathon-ready",  desc: "One config file to swap branding, fields, and AI behavior. Ship in hours." },
     ],
     howItWorks: [
@@ -137,24 +86,11 @@ export const appConfig = {
     ],
   },
 
-  // ---------- Tables ----------
-  // First entry = primary table. The dashboard, AI agent, and form
-  // all operate on the active table (switchable from the sidebar).
   tables: [PRIMARY_TABLE] as readonly TableConfig[],
 
-  // ---------- Legacy single-table accessors ----------
-  // These mirror `tables[0]` for backwards compat with older code.
-  // New code should use `tables.find(t => t.id === ...)` directly.
   get entity() { return PRIMARY_TABLE.entity; },
   get fields() { return PRIMARY_TABLE.fields; },
-  get searchFields() { return PRIMARY_TABLE.searchFields; },
-  get lowStockField() { return PRIMARY_TABLE.lowStockField ?? ""; },
-  get lowStockThreshold() { return PRIMARY_TABLE.lowStockThreshold ?? 0; },
-  get samples() { return PRIMARY_TABLE.samples; },
 
-  // ---------- AI Agent ----------
-  // Global AI config; the system prompt is built per active table
-  // so the agent automatically knows the current schema.
   ai: {
     name: "AI Agent",
     welcome: "Hey! I can answer questions and take actions. Try the suggestions below.",
@@ -165,10 +101,6 @@ export const appConfig = {
     ],
   },
 } as const;
-
-// =============================================================
-//  Helpers
-// =============================================================
 
 export function getTableById(id: string): TableConfig | undefined {
   return appConfig.tables.find((t) => t.id === id);
@@ -185,9 +117,6 @@ export function isLowStock(item: Record<string, unknown>, table: TableConfig = P
   return value < (table.lowStockThreshold ?? 0);
 }
 
-// =============================================================
-//  Accent palette — drives the actual CSS color values
-// =============================================================
 export type ThemeName = "green" | "blue" | "purple" | "red" | "orange";
 
 export type AccentPalette = {
@@ -210,7 +139,6 @@ export type AccentPalette = {
   lowBg: string;
   lowBorder: string;
 
-  // Extra colors for charts (variants of the accent)
   chart1: string;
   chart2: string;
   chart3: string;

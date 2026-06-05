@@ -166,8 +166,8 @@ export default function Landing() {
             <span className="text-muted text-xs ml-2">&copy; 2026</span>
           </div>
           <div className="flex gap-6 text-xs text-muted">
-            <Link href="/settings" className="hover:text-fg transition-colors">Settings</Link>
-            <Link href="/profile" className="hover:text-fg transition-colors">Profile</Link>
+            <Link href="/login" className="hover:text-fg transition-colors">Log in</Link>
+            <Link href="/signup" className="hover:text-fg transition-colors">Sign up</Link>
             <a href="#features" className="hover:text-fg transition-colors">Features</a>
           </div>
         </div>

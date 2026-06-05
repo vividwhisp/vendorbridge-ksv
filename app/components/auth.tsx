@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { db } from "../lib/supabase-db";
-import { useLog } from "../lib/log-context";
 import { useToast } from "../lib/toast-context";
 import type { AuthMode } from "../types";
 import Navbar from "./navbar";
@@ -16,7 +15,6 @@ type AuthProps = {
 
 export default function Auth({ mode }: AuthProps) {
   const router = useRouter();
-  const { log } = useLog();
   const { showToast } = useToast();
   const [email, setEmail] = useState(mode === "login" ? "kori@dev.com" : "");
   const [pass, setPass] = useState(mode === "login" ? "1234" : "");
@@ -26,25 +24,19 @@ export default function Auth({ mode }: AuthProps) {
   async function submit() {
     setBusy(true);
     setErr("");
-    log("REACT", `supabase.auth.${mode === "login" ? "signInWithPassword" : "signUp"}()`);
-    log("AUTH", `Processing ${mode} for ${email}...`);
 
     try {
       const { user, error } = await (mode === "login" ? db.signIn(email, pass) : db.signUp(email, pass));
 
       if (error || !user) {
-        log("AUTH", `Error: ${error}`, false, true);
         setErr(error ?? "Authentication failed");
         showToast(error ?? "Authentication failed", "error");
       } else {
-        log("AUTH", "JWT issued, session stored", true);
-        log("REACT", "router.push('/dashboard')", true);
         showToast(mode === "login" ? "Welcome back!" : "Account created!", "success");
         router.push("/dashboard");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      log("AUTH", `Error: ${message}`, false, true);
       setErr(message);
       showToast(message, "error");
     } finally {

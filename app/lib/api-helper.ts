@@ -52,13 +52,61 @@ export function handleApiError(error: unknown) {
   return NextResponse.json({ error: message }, { status });
 }
 
-async function getToken() {
-  const { data } = await getSupabase().auth.getSession();
-  return data.session?.access_token;
+function isCorruptSessionError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const msg = (err as { message?: string }).message ?? "";
+  return /Invalid Refresh Token|Refresh Token Not Found/i.test(msg);
+}
+
+function clearClientAuth() {
+  if (typeof document === "undefined") return;
+  for (const name of Array.from(document.cookie.split(";").map((c) => c.split("=")[0].trim()))) {
+    if (name === "sb-access-token" || /^sb-.+-auth-token$/.test(name)) {
+      document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+    }
+  }
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && /^sb-.+-auth-token$/.test(k)) localStorage.removeItem(k);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function getToken(): Promise<string | null> {
+  try {
+    const { data, error } = await getSupabase().auth.getSession();
+    if (error && isCorruptSessionError(error)) {
+      clearClientAuth();
+      return null;
+    }
+    return data.session?.access_token ?? null;
+  } catch (err) {
+    if (isCorruptSessionError(err)) {
+      clearClientAuth();
+      return null;
+    }
+    return null;
+  }
 }
 
 function headers(token: string) {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+function notifyUnauthorized() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+}
+
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
 // Returns the tableName (DB name) for a given config id, or throws.
@@ -95,45 +143,70 @@ export function prepareUpdateStatus(
 
 export async function apiGetAll(tableId: string): Promise<Record<string, unknown>[]> {
   const token = await getToken();
-  const res = await fetch(`/api/${tableId}`, { headers: headers(token!) });
-  if (!res.ok) throw new Error((await res.json()).error);
+  if (!token) throw new Error("Unauthorized");
+  const res = await fetch(`/api/${tableId}`, { headers: headers(token) });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error((await safeJson(res)).error);
   return res.json();
 }
 
 export async function apiInsert(tableId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
   const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
   const res = await fetch(`/api/${tableId}`, {
     method: "POST",
-    headers: headers(token!),
+    headers: headers(token),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error((await res.json()).error);
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error((await safeJson(res)).error);
   return res.json();
 }
 
 export async function apiUpdate(tableId: string, id: number, data: Record<string, unknown>): Promise<Record<string, unknown>> {
   const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
   const res = await fetch(`/api/${tableId}/${id}`, {
     method: "PUT",
-    headers: headers(token!),
+    headers: headers(token),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error((await res.json()).error);
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error((await safeJson(res)).error);
   return res.json();
 }
 
 export async function apiRemove(tableId: string, id: number): Promise<void> {
   const token = await getToken();
-  const res = await fetch(`/api/${tableId}/${id}`, { method: "DELETE", headers: headers(token!) });
-  if (!res.ok) throw new Error((await res.json()).error);
+  if (!token) throw new Error("Unauthorized");
+  const res = await fetch(`/api/${tableId}/${id}`, { method: "DELETE", headers: headers(token) });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error((await safeJson(res)).error);
 }
 
 export async function apiSeed(tableId: string): Promise<Record<string, unknown>[]> {
   const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
   const res = await fetch(`/api/${tableId}/seed`, {
     method: "POST",
-    headers: headers(token!),
+    headers: headers(token),
   });
-  if (!res.ok) throw new Error((await res.json()).error);
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error((await safeJson(res)).error);
   return res.json();
 }
