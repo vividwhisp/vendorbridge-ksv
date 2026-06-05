@@ -1,15 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { appConfig } from "../lib/config";
-import Navbar from "./navbar";
+
+const appConfig = {
+  name: "DataHub",
+  tagline: "AI-powered data workspace",
+  description: "Manage any data with search, filters, and an AI agent.",
+  landing: {
+    pill: "Next.js 16 + AI",
+    heroAccent: "that talks back.",
+    features: [
+      { title: "Real-time sync",   desc: "Live updates with row-level security. Your data, isolated per user." },
+      { title: "AI agent",         desc: "Ask in plain English. The agent reads your data and takes real actions on it." },
+      { title: "Instant search",   desc: "Filter and search through your data as you type." },
+      { title: "Toast feedback",   desc: "Every action gets a confirmation. Errors, successes, and info, all in one place." },
+      { title: "Workflow status",  desc: "Per-table lifecycle states. The dashboard adapts automatically." },
+      { title: "File uploads",     desc: "Drop an image or PDF on any record. Stored locally in the uploads folder." },
+      { title: "Role-based access", desc: "Admin vs user permissions enforced at the edge. Add roles in 3 lines." },
+      { title: "Hackathon-ready",  desc: "One config file to swap branding, fields, and AI behavior. Ship in hours." },
+    ],
+    howItWorks: [
+      { num: "01", title: "Edit one file", desc: "Change branding, fields, and AI prompts in the config." },
+      { num: "02", title: "Add a table",   desc: "Append a new entity definition. The UI adapts automatically." },
+      { num: "03", title: "Ship it",       desc: "Auth, CRUD, AI, and UI all wire up. Deploy in minutes." },
+    ],
+    useCases: [
+      "Inventory & stock tracking",
+      "Task & project boards",
+      "Recipe & meal planners",
+      "Bookmark managers",
+      "CRM & contact lists",
+      "Reading lists & notes",
+    ],
+  },
+};
 
 const { pill, heroAccent, features, howItWorks, useCases } = appConfig.landing;
 
 export default function Landing() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
+      <nav className="sticky top-0 z-30 bg-bg/80 backdrop-blur border-b border-border">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-1">
+          <Link href="/" className="flex items-center gap-2 text-fg font-semibold text-sm mr-2">
+            <span className="text-accent">&#9632;</span>
+            {appConfig.name}
+          </Link>
+          <nav className="hidden sm:flex items-center gap-5 ml-6">
+            <a href="#features" className="text-muted hover:text-fg text-sm transition-colors">Features</a>
+            <a href="#how" className="text-muted hover:text-fg text-sm transition-colors">How it works</a>
+            <a href="#usecases" className="text-muted hover:text-fg text-sm transition-colors">Use cases</a>
+          </nav>
+        </div>
+      </nav>
 
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 text-center pt-14">
         <div className="animate-fadeInUp">
@@ -26,16 +69,13 @@ export default function Landing() {
           {appConfig.description}
         </p>
         <div className="animate-fadeInUp delay-3 flex flex-col sm:flex-row gap-3 w-full max-w-[320px]">
-          <Link href="/signup" className="flex-1 bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-5 py-3.5 rounded-xl transition-all hover:scale-[1.02] text-center">
+          <a href="#features" className="flex-1 bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-5 py-3.5 rounded-xl transition-all hover:scale-[1.02] text-center">
             Start for free
-          </Link>
-          <Link href="/login" className="flex-1 border border-border text-fg hover:border-muted text-sm font-medium px-5 py-3.5 rounded-xl transition-all hover:bg-surface text-center">
+          </a>
+          <a href="#features" className="flex-1 border border-border text-fg hover:border-muted text-sm font-medium px-5 py-3.5 rounded-xl transition-all hover:bg-surface text-center">
             See the demo
-          </Link>
+          </a>
         </div>
-        <p className="animate-fadeInUp delay-4 text-muted text-xs mt-6 font-mono">
-          demo: <span className="text-subtle">kori@dev.com</span> / <span className="text-subtle">1234</span>
-        </p>
 
         <div className="animate-fadeInUp delay-5 mt-20 sm:mt-28 max-w-4xl w-full">
           <div className="border border-border rounded-2xl bg-surface/60 backdrop-blur p-3 shadow-2xl">
@@ -148,12 +188,12 @@ export default function Landing() {
             Start with a working app in under a minute. No boilerplate, no setup, just <code className="text-accent">npm run dev</code>.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/signup" className="bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-7 py-3.5 rounded-xl transition-all hover:scale-[1.02]">
+            <a href="#features" className="bg-accent hover:bg-accent-hover text-bg text-sm font-semibold px-7 py-3.5 rounded-xl transition-all hover:scale-[1.02]">
               Create free account
-            </Link>
-            <Link href="/login" className="border border-border text-fg hover:border-muted text-sm font-medium px-7 py-3.5 rounded-xl transition-all hover:bg-surface">
+            </a>
+            <a href="#features" className="border border-border text-fg hover:border-muted text-sm font-medium px-7 py-3.5 rounded-xl transition-all hover:bg-surface">
               Try the demo
-            </Link>
+            </a>
           </div>
         </div>
       </section>
@@ -166,9 +206,9 @@ export default function Landing() {
             <span className="text-muted text-xs ml-2">&copy; 2026</span>
           </div>
           <div className="flex gap-6 text-xs text-muted">
-            <Link href="/login" className="hover:text-fg transition-colors">Log in</Link>
-            <Link href="/signup" className="hover:text-fg transition-colors">Sign up</Link>
             <a href="#features" className="hover:text-fg transition-colors">Features</a>
+            <a href="#how" className="hover:text-fg transition-colors">How it works</a>
+            <a href="#usecases" className="hover:text-fg transition-colors">Use cases</a>
           </div>
         </div>
       </footer>
