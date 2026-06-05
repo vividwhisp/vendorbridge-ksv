@@ -1,34 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { getSupabase } from "./supabase-client";
 import { getTableById } from "./config";
 import { hasWorkflow, validateState } from "./workflow";
 import { can, normalizeRole, ROLE_HEADER, type Action, type Role } from "./rbac";
-
-function getApiSupabase(token: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error("Missing Supabase env vars");
-  }
-  // Permissive client: we don't know the table types at compile time
-  // (the Dashboard accepts any number of tables via config). RLS is still
-  // enforced server-side by Supabase using the user's JWT.
-  return createClient(url, key, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false },
-  });
-}
-
-export async function getUserFromToken(request: Request) {
-  const auth = request.headers.get("Authorization");
-  const token = auth?.replace("Bearer ", "");
-  if (!token) throw new Error("Unauthorized");
-  const supabase = getApiSupabase(token);
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) throw new Error("Unauthorized");
-  return { user: data.user, supabase };
-}
 
 export function getRoleFromRequest(request: Request): Role {
   const fromHeader = request.headers.get(ROLE_HEADER);
@@ -76,6 +49,7 @@ function clearClientAuth() {
 }
 
 async function getToken(): Promise<string | null> {
+  const { getSupabase } = await import("./supabase-client");
   try {
     const { data, error } = await getSupabase().auth.getSession();
     if (error && isCorruptSessionError(error)) {
@@ -109,14 +83,12 @@ async function safeJson(res: Response) {
   }
 }
 
-// Returns the tableName (DB name) for a given config id, or throws.
 export function resolveTableName(id: string): string {
   const t = getTableById(id);
   if (!t) throw new Error(`Unknown table: ${id}`);
   return t.tableName ?? t.id;
 }
 
-// Normalize `status` on insert: fill default if missing, validate if present.
 export function prepareInsertStatus(
   row: Record<string, unknown>,
   tableId: string,
@@ -128,7 +100,6 @@ export function prepareInsertStatus(
   return { ...row, status: check.value };
 }
 
-// Validate `status` on update if present.
 export function prepareUpdateStatus(
   body: Record<string, unknown>,
   tableId: string,

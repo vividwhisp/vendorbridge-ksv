@@ -1,0 +1,46 @@
+// Prisma schema for DataHub
+// One model per TableConfig entry in app/lib/config.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  profile      Profile?
+  products     Product[]
+
+  @@map("users")
+}
+
+model Profile {
+  userId    String   @id @map("user_id")
+  role      String   @default("user")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  name      String
+  price     Decimal  @default(0) @db.Decimal(12, 2)
+  quantity  Int      @default(0)
+  category  String   @default("General")
+  status    String   @default("Active")
+  imageUrl  String?  @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("products")
+}

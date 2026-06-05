@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { prisma } from "./lib/prisma";
 import { normalizeRole, ROLE_HEADER } from "./app/lib/rbac";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/account", "/api/me"];
@@ -22,9 +23,7 @@ function readAccessToken(request: NextRequest): string | null {
     }
     if (/^sb-.+-auth-token$/.test(name) && value) {
       try {
-        const parsed = JSON.parse(decodeURIComponent(value)) as {
-          access_token?: string;
-        };
+        const parsed = JSON.parse(decodeURIComponent(value)) as { access_token?: string };
         if (parsed.access_token) return parsed.access_token;
       } catch {
         try {
@@ -84,11 +83,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
   const role = normalizeRole(profile?.role);
 
   const headers = new Headers(request.headers);

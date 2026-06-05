@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useToast } from "../lib/toast-context";
-import { getSupabase } from "../lib/supabase-client";
 import { apiGetAll, apiInsert, apiUpdate, apiRemove, apiSeed } from "../lib/api-helper";
 import { appConfig, isLowStock, getTableById, getPrimaryTable, type TableConfig } from "../lib/config";
 import type { Row } from "../types";
@@ -59,24 +58,13 @@ export default function DashboardView() {
   }, [activeTableId]);
 
   useEffect(() => {
-    const tableName = currentTable.tableName ?? currentTable.id;
-    const channel = getSupabase()
-      .channel(`changes-${activeTableId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: tableName },
-        () => {
-          apiGetAll(activeTableId)
-            .then((data) => setItems(data))
-            .catch(() => {});
-        }
-      )
-      .subscribe();
-
-    return () => {
-      getSupabase().removeChannel(channel);
-    };
-  }, [activeTableId, currentTable]);
+    const interval = setInterval(() => {
+      apiGetAll(activeTableId)
+        .then((data) => setItems(data))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeTableId]);
 
   function switchTable(id: string) {
     if (id === activeTableId) return;
@@ -160,12 +148,9 @@ export default function DashboardView() {
 
   const lowCount = items.filter((it) => isLowStock(it, currentTable)).length;
   const okCount = items.length - lowCount;
-  const stateCounts = useMemo(
-    () => (useWorkflow ? countByState(items, currentTable) : {}),
-    [items, currentTable, useWorkflow],
-  );
+  const stateCounts = useWorkflow ? countByState(items, currentTable) : {};
 
-  const filtered = useMemo(() => items.filter((p) => {
+  const filtered = items.filter((p) => {
     const q = search.toLowerCase();
     const matchSearch = !q || currentTable.searchFields.some((f) => String(p[f] ?? "").toLowerCase().includes(q));
     let matchFilter: boolean;
@@ -178,7 +163,7 @@ export default function DashboardView() {
         || (filter === "ok" && !isLowStock(p, currentTable));
     }
     return matchSearch && matchFilter;
-  }), [items, search, filter, currentTable, useWorkflow]);
+  });
 
   const stats: { label: string; value: string }[] = [
     { label: `Total ${currentTable.entity.title}`, value: String(items.length) },
@@ -194,7 +179,7 @@ export default function DashboardView() {
   stats.push({ label: "Filtered", value: String(filtered.length) });
 
   const categoricalField = currentTable.fields.find((f) => f.key !== "name" && f.type !== "number");
-  const categoryChart: BarDatum[] = useMemo(() => {
+  const categoryChart: BarDatum[] = (() => {
     if (!categoricalField) return [];
     const counts = new Map<string, number>();
     for (const it of items) {
@@ -205,20 +190,17 @@ export default function DashboardView() {
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [items, categoricalField]);
+  })();
 
-  const statusPie: PieDatum[] = useMemo(() => {
-    if (useWorkflow) {
-      return (currentTable.workflow ?? []).map((state) => ({
+  const statusPie: PieDatum[] = useWorkflow
+    ? (currentTable.workflow ?? []).map((state) => ({
         label: state,
         value: stateCounts[state] ?? 0,
-      }));
-    }
-    return [
-      { label: "In stock", value: okCount },
-      { label: "Low stock", value: lowCount },
-    ];
-  }, [useWorkflow, currentTable, stateCounts, okCount, lowCount]);
+      }))
+    : [
+        { label: "In stock", value: okCount },
+        { label: "Low stock", value: lowCount },
+      ];
 
   return (
     <div className="min-h-screen flex flex-col">

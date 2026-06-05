@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
-import { getUserFromToken, handleApiError } from "../../lib/api-helper";
+import { prisma } from "@/lib/prisma";
+import { handleApiError } from "../../lib/api-helper";
+import { getUserFromRequest } from "../../lib/server-api-helper";
 import { normalizeRole } from "../../lib/rbac";
 
 export async function GET(request: Request) {
   try {
-    const { supabase, user } = await getUserFromToken(request);
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) throw new Error(error.message);
-
+    const me = await getUserFromRequest(request);
+    const profile = await prisma.profile.findUnique({ where: { userId: me.id } });
     return NextResponse.json({
-      id: user.id,
-      email: user.email,
-      role: normalizeRole(data?.role),
+      id: me.id,
+      email: me.email,
+      role: normalizeRole(profile?.role),
     });
   } catch (error) {
     return handleApiError(error);

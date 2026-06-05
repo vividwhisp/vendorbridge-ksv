@@ -59,22 +59,22 @@ export const appConfig = {
   accent: "green" as ThemeName,
 
   landing: {
-    pill: "Next.js 16 + Supabase + AI",
+    pill: "Next.js 16 + Prisma + AI",
     heroAccent: "that talks back.",
     features: [
-      { title: "Real-time sync",   desc: "Live updates from Supabase with row-level security. Your data, isolated per user." },
+      { title: "Prisma + Postgres", desc: "Type-safe queries against PostgreSQL. Schema lives in `prisma/schema.prisma`." },
       { title: "AI agent",         desc: "Ask in plain English. The agent reads your data and takes real actions on it." },
       { title: "Instant search",   desc: "Filter and search through your data as you type." },
       { title: "Toast feedback",   desc: "Every action gets a confirmation. Errors, successes, and info, all in one place." },
       { title: "Workflow status",  desc: "Per-table lifecycle states. The dashboard adapts automatically." },
-      { title: "File uploads",     desc: "Drop an image or PDF on any record. Stored in your Supabase bucket." },
+      { title: "File uploads",     desc: "Drop an image or PDF on any record. Stored locally in the `uploads/` folder." },
       { title: "Role-based access", desc: "Admin vs user permissions enforced at the edge. Add roles in 3 lines." },
       { title: "Hackathon-ready",  desc: "One config file to swap branding, fields, and AI behavior. Ship in hours." },
     ],
     howItWorks: [
-      { num: "01", title: "Edit one file", desc: "Change branding, fields, and AI prompts in `app/lib/config.ts`." },
-      { num: "02", title: "Add a table",   desc: "Run the SQL schema in Supabase, or tweak it for your domain." },
-      { num: "03", title: "Ship it",       desc: "Auth, CRUD, AI, and UI all adapt. Deploy to Vercel in minutes." },
+      { num: "01", title: "Edit one file",   desc: "Change branding, fields, and AI prompts in `app/lib/config.ts`." },
+      { num: "02", title: "Edit the schema", desc: "Update `prisma/schema.prisma` and run `prisma migrate dev`." },
+      { num: "03", title: "Ship it",         desc: "Auth, CRUD, AI, and UI all adapt. Run `docker compose up` and go." },
     ],
     useCases: [
       "Inventory & stock tracking",
