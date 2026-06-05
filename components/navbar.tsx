@@ -2,11 +2,14 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useSession, signOut } from "next-auth/react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sidebar } from "@/components/sidebar"
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { data: session } = useSession()
+  const user = session?.user
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-bg/95 backdrop-blur px-4 lg:px-6">
@@ -25,7 +28,23 @@ export function Navbar() {
         </h2>
       </div>
 
+      {user && (
+        <div className="hidden sm:flex items-center gap-2 text-sm text-muted">
+          <span className="text-fg font-medium">{user.name || user.email}</span>
+          <span className="text-xs border border-border rounded-full px-2 py-0.5">{user.role}</span>
+        </div>
+      )}
+
       <ThemeToggle />
+
+      {user && (
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="flex h-8 items-center rounded-lg border border-border px-3 text-xs text-muted hover:bg-surface hover:text-fg transition-colors"
+        >
+          Logout
+        </button>
+      )}
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
