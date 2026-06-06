@@ -175,14 +175,14 @@ model QuotationItem {
 model Approval {
   id           String         @id @default(cuid())
   quotationId  String         @unique
-  approvedById String
+  approvedById String?
   remarks      String?
   status       ApprovalStatus @default(PENDING)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   quotation  Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  approvedBy User      @relation(fields: [approvedById], references: [id])
+  approvedBy User?     @relation(fields: [approvedById], references: [id])
 
   @@index([approvedById])
   @@index([status])

@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react"
 import Link from "next/link"
 import { RfqStatusBadge } from "@/features/rfq/components/status-badge"
+import { canCompareQuotations } from "@/lib/permissions"
 import type { RfqDetail } from "@/features/rfq/types/rfq-types"
 
 export default function RfqDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -10,12 +11,18 @@ export default function RfqDetailPage(props: { params: Promise<{ id: string }> }
   const [rfq, setRfq] = useState<RfqDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [canCompare, setCanCompare] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/rfqs/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("RFQ not found")
-        return res.json()
+    Promise.all([
+      fetch(`/api/rfqs/${id}`),
+      fetch("/api/auth/session"),
+    ])
+      .then(async ([rfqRes, sessionRes]) => {
+        if (!rfqRes.ok) throw new Error("RFQ not found")
+        const session = await sessionRes.json()
+        if (session?.user?.role) setCanCompare(canCompareQuotations(session.user.role))
+        return rfqRes.json()
       })
       .then((data) => setRfq(data))
       .catch((e) => setError(e.message))
@@ -59,6 +66,14 @@ export default function RfqDetailPage(props: { params: Promise<{ id: string }> }
           <h1 className="text-xl font-semibold text-fg">{rfq.title}</h1>
           <RfqStatusBadge status={rfq.status} />
         </div>
+        {canCompare && (
+          <Link
+            href={`/dashboard/rfqs/${id}/comparison`}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-hover transition-colors shrink-0"
+          >
+            <span>Compare Quotations</span>
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
