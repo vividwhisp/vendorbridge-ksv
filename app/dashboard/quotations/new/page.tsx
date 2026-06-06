@@ -11,10 +11,10 @@ interface RfqItem {
   quantity: number
 }
 
-interface Rfq {
+interface RfqListItem {
   id: string
   title: string
-  items: RfqItem[]
+  itemCount: number
 }
 
 interface QuotationItem {
@@ -26,7 +26,7 @@ interface QuotationItem {
 
 export default function NewQuotationPage() {
   const router = useRouter()
-  const [rfqs, setRfqs] = useState<Rfq[]>([])
+  const [rfqs, setRfqs] = useState<RfqListItem[]>([])
   const [selectedRfqId, setSelectedRfqId] = useState("")
   const [items, setItems] = useState<QuotationItem[]>([])
   const [deliveryDays, setDeliveryDays] = useState(7)
@@ -55,22 +55,30 @@ export default function NewQuotationPage() {
     init()
   }, [router])
 
-  function handleRfqSelect(rfqId: string) {
+  async function handleRfqSelect(rfqId: string) {
     setSelectedRfqId(rfqId)
-    const rfq = rfqs.find((r) => r.id === rfqId)
-    if (rfq) {
-      setItems(
-        rfq.items.map((i) => ({
-          productName: i.productName,
-          quantity: i.quantity,
-          unitPrice: 0,
-          totalPrice: 0,
-        }))
-      )
-    } else {
-      setItems([])
-    }
+    setItems([])
     setErrors({})
+    if (!rfqId) return
+
+    try {
+      const res = await fetch(`/api/rfqs/${rfqId}`)
+      if (res.ok) {
+        const rfq = await res.json()
+        if (rfq?.items) {
+          setItems(
+            rfq.items.map((i: RfqItem) => ({
+              productName: i.productName,
+              quantity: i.quantity,
+              unitPrice: 0,
+              totalPrice: 0,
+            }))
+          )
+        }
+      }
+    } catch {
+      // ignore fetch errors
+    }
   }
 
   function updateItem(index: number, field: keyof QuotationItem, value: string) {
@@ -165,7 +173,7 @@ export default function NewQuotationPage() {
               <option value="">Select an RFQ...</option>
               {rfqs.map((rfq) => (
                 <option key={rfq.id} value={rfq.id}>
-                  {rfq.title} ({rfq.items.length} items)
+                  {rfq.title} ({rfq.itemCount} items)
                 </option>
               ))}
             </select>
