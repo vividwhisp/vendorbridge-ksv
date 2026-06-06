@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/navbar"
 import { Sidebar } from "@/components/sidebar"
+import { AnimatedBackground } from "@/components/animated-background"
 
 export default function DashboardLayout({
   children,
@@ -7,7 +8,8 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
+      <AnimatedBackground />
       <div className="fixed inset-y-0 left-0 z-30 hidden w-60 lg:block">
         <Sidebar />
       </div>

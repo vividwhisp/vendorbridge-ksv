@@ -25,10 +25,10 @@ export function Navbar() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-bg/95 backdrop-blur px-4 lg:px-6">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-bg/95 backdrop-blur px-4 lg:px-6 animate-slide-in-down">
       <button
         onClick={() => setMobileOpen(true)}
-        className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg border border-border text-muted hover:bg-surface hover:text-fg transition-colors"
+        className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg border border-border text-muted hover:bg-surface hover:text-fg transition-all duration-300 hover:scale-110"
         aria-label="Open menu"
       >
         <span>☰</span>
@@ -36,7 +36,7 @@ export function Navbar() {
 
       <div className="flex-1">
         <h2 className="text-sm font-semibold text-fg">
-          <Link href="/" className="lg:hidden font-bold">Vendor Bridge</Link>
+          <Link href="/" className="lg:hidden font-bold hover:text-accent transition-colors duration-300">Vendor Bridge</Link>
           <span className="hidden lg:inline">Dashboard</span>
         </h2>
       </div>
@@ -47,7 +47,7 @@ export function Navbar() {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-fg hover:bg-surface transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-fg hover:bg-surface transition-all duration-300 hover:border-accent"
           >
             <span className="flex size-6 items-center justify-center rounded-full bg-accent text-bg text-xs font-medium">
               {(user.name || user.email || "U")[0].toUpperCase()}
@@ -58,7 +58,7 @@ export function Navbar() {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-border bg-surface shadow-lg py-1 z-30">
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-border bg-surface shadow-lg py-1 z-30 animate-scale-in">
               <div className="px-3 py-2 border-b border-border">
                 <p className="text-sm font-medium text-fg truncate">{user.name}</p>
                 <p className="text-xs text-muted truncate">{user.email}</p>
@@ -69,7 +69,7 @@ export function Navbar() {
               <Link
                 href="/dashboard"
                 onClick={() => setDropdownOpen(false)}
-                className="block px-3 py-2 text-sm text-fg hover:bg-border/30 transition-colors"
+                className="block px-3 py-2 text-sm text-fg hover:bg-border/30 transition-all duration-300 hover:pl-4"
               >
                 Dashboard
               </Link>
@@ -78,7 +78,7 @@ export function Navbar() {
                   setDropdownOpen(false)
                   signOut({ callbackUrl: "/" })
                 }}
-                className="block w-full text-left px-3 py-2 text-sm text-danger hover:bg-border/30 transition-colors"
+                className="block w-full text-left px-3 py-2 text-sm text-danger hover:bg-border/30 transition-all duration-300 hover:pl-4"
               >
                 Logout
               </button>
@@ -89,15 +89,15 @@ export function Navbar() {
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
           <div
             className="fixed inset-0 bg-black/40"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-60 bg-surface shadow-lg">
+          <div className="fixed inset-y-0 left-0 z-50 w-60 bg-surface shadow-lg animate-slide-in-down" style={{ animationDirection: "normal" }}>
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-md text-muted hover:text-fg hover:bg-border/30"
+              className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-md text-muted hover:text-fg hover:bg-border/30 transition-all duration-300 hover:scale-110"
               aria-label="Close menu"
             >
               ✕
