@@ -151,7 +151,8 @@ npx prisma studio        # Browse data via GUI
 - **Naming** — `params` / `searchParams` are Promises (Next.js 15+), must be `await`ed or unwrapped with `use()`.
 
 ---
-
+## Deployed at
+https://vendorbridge-ksv-production.up.railway.app
 ## License
 
 MIT — use, fork, ship.
