@@ -1,18 +1,22 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useSession, signOut } from "next-auth/react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sidebar } from "@/components/sidebar"
 import { RoleBadge } from "@/components/role-badge"
+import { Menu, X } from "lucide-react"
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession()
   const user = session?.user
+
+  const closeMobile = useCallback(() => setMobileOpen(false), [])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -24,14 +28,32 @@ export function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (!mobileOpen) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeMobile()
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [mobileOpen, closeMobile])
+
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+    return () => { document.body.style.overflow = "" }
+  }, [mobileOpen])
+
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-bg/95 backdrop-blur px-4 lg:px-6 animate-slide-in-down">
       <button
         onClick={() => setMobileOpen(true)}
-        className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg border border-border text-muted hover:bg-surface hover:text-fg transition-all duration-300 hover:scale-110"
+        className="flex lg:hidden h-9 w-9 items-center justify-center rounded-lg border border-border text-muted hover:bg-surface hover:text-fg transition-all duration-300 hover:border-accent"
         aria-label="Open menu"
       >
-        <span>☰</span>
+        <Menu className="size-4" />
       </button>
 
       <div className="flex-1">
@@ -89,20 +111,23 @@ export function Navbar() {
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
+        <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="fixed inset-0 bg-black/40"
-            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
+            onClick={closeMobile}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-60 bg-surface shadow-lg animate-slide-in-down" style={{ animationDirection: "normal" }}>
+          <div
+            ref={sidebarRef}
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-surface shadow-2xl animate-slide-in-left"
+          >
             <button
-              onClick={() => setMobileOpen(false)}
-              className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-md text-muted hover:text-fg hover:bg-border/30 transition-all duration-300 hover:scale-110"
+              onClick={closeMobile}
+              className="absolute top-3.5 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted hover:text-fg hover:bg-border/30 transition-all duration-300 hover:scale-110"
               aria-label="Close menu"
             >
-              ✕
+              <X className="size-4" />
             </button>
-            <Sidebar />
+            <Sidebar onClose={closeMobile} />
           </div>
         </div>
       )}

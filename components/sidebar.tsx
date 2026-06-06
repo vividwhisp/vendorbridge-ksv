@@ -13,13 +13,17 @@ const navItems = [
   { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
 ]
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname()
+
+  function handleNav() {
+    onClose?.()
+  }
 
   return (
     <aside className="flex h-full flex-col border-r border-border bg-surface animate-fade-in">
       <div className="flex h-14 items-center border-b border-border px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-fg hover:text-accent transition-colors duration-300">
+        <Link href="/" onClick={handleNav} className="flex items-center gap-2 font-semibold text-fg hover:text-accent transition-colors duration-300">
           <span className="flex size-6 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">VB</span>
           Vendor Bridge
         </Link>
@@ -32,6 +36,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNav}
               style={{ animationDelay: `${index * 0.05}s` }}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-300 hover:scale-105 origin-left ${
                 isActive
@@ -48,6 +53,7 @@ export function Sidebar() {
       <div className="p-3 border-t border-border">
         <Link
           href="/dashboard/settings"
+          onClick={handleNav}
           className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:text-fg hover:bg-border/30 transition-all duration-300 hover:scale-105 origin-left"
         >
           <Settings className="size-4 transition-transform duration-300 group-hover:rotate-90" />
