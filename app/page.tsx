@@ -80,7 +80,7 @@ export default function Home() {
       <footer className="border-t border-border py-6">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-sm text-muted">
-            &copy; {new Date().getFullYear()} Vendor Bridge.
+            &copy; {new Date().getFullYear()} VendorBridge
           </p>
           <nav className="flex gap-4 text-sm text-muted">
             <Link href="/dashboard" className="hover:text-fg transition-colors">

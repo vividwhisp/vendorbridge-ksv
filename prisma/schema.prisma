@@ -1,17 +1,275 @@
 datasource db {
   provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// ── Enums ──
+
+enum Role {
+  ADMIN
+  PROCUREMENT_OFFICER
+  MANAGER
+  VENDOR
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BLACKLISTED
+}
+
+enum VendorCategory {
+  MATERIALS
+  SERVICES
+  IT
+  CONSULTING
+  TRANSPORTATION
+  OTHER
+}
+
+enum RFQStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum POStatus {
+  DRAFT
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+  WRITTEN_OFF
+}
+
+// ── Models ──
+
 model User {
-  id           String   @id @default(uuid())
-  name         String?
+  id           String   @id @default(cuid())
+  name         String
   email        String   @unique
   passwordHash String
-  role         String   @default("user")
+  role         Role     @default(VENDOR)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  rfqs          RFQ[]
+  approvals     Approval[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+}
+
+model Vendor {
+  id          String         @id @default(cuid())
+  companyName String
+  gstNumber   String         @unique
+  email       String
+  phone       String
+  address     String
+  category    VendorCategory
+  status      VendorStatus   @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  quotations Quotation[]
+}
+
+model RFQ {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  deadline    DateTime
+  status      RFQStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy  User        @relation(fields: [createdById], references: [id])
+  items      RFQItem[]
+  quotations Quotation[]
+
+  @@index([createdById])
+  @@index([status])
+  @@index([deadline])
+}
+
+model RFQItem {
+  id            String  @id @default(cuid())
+  rfqId         String
+  productName   String
+  quantity      Int
+  specification String?
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
+}
+
+model Quotation {
+  id           String          @id @default(cuid())
+  rfqId        String
+  vendorId     String
+  totalAmount  Float
+  deliveryDays Int
+  remarks      String?
+  status       QuotationStatus @default(DRAFT)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  rfq           RFQ               @relation(fields: [rfqId], references: [id])
+  vendor        Vendor            @relation(fields: [vendorId], references: [id])
+  items         QuotationItem[]
+  approval      Approval?
+  purchaseOrder PurchaseOrder?
+
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([status])
+  @@unique([rfqId, vendorId])
+}
+
+model QuotationItem {
+  id          String @id @default(cuid())
+  quotationId String
+  productName String
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+}
+
+model Approval {
+  id           String         @id @default(cuid())
+  quotationId  String         @unique
+  approvedById String
+  remarks      String?
+  status       ApprovalStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  quotation  Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  approvedBy User      @relation(fields: [approvedById], references: [id])
+
+  @@index([approvedById])
+  @@index([status])
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  poNumber    String   @unique
+  quotationId String   @unique
+  status      POStatus @default(DRAFT)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotation Quotation          @relation(fields: [quotationId], references: [id])
+  items     PurchaseOrderItem[]
+  invoices  Invoice[]
+
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  productName     String
+  quantity        Int
+  unitPrice       Float
+  totalPrice      Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique
+  purchaseOrderId String
+  subtotal        Float
+  tax             Float
+  totalAmount     Float
+  status          InvoiceStatus @default(DRAFT)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  items         InvoiceItem[]
+
+  @@index([purchaseOrderId])
+  @@index([status])
+}
+
+model InvoiceItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  productName String
+  quantity  Int
+  unitPrice Float
+  totalPrice Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  entityType String
+  entityId   String
+  action     String
+  timestamp  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, isRead])
 }

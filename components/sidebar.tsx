@@ -5,9 +5,14 @@ import { usePathname } from "next/navigation"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/users", label: "Users" },
-  { href: "/dashboard/settings", label: "Settings" },
+  { href: "/dashboard/vendors", label: "Vendors" },
+  { href: "/dashboard/rfqs", label: "RFQs" },
+  { href: "/dashboard/quotations", label: "Quotations" },
+  { href: "/dashboard/approval", label: "Approvals" },
+  { href: "/dashboard/purchase-orders", label: "Purchase Orders" },
+  { href: "/dashboard/invoices", label: "Invoices" },
+  { href: "/dashboard/reports", label: "Reports" },
+  { href: "/dashboard/activities", label: "Activities" }
 ]
 
 export function Sidebar() {
