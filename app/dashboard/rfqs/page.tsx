@@ -32,16 +32,16 @@ export default function RfqsPage() {
   useEffect(() => { fetchRfqs(filters) }, [filters, fetchRfqs])
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-fg">RFQs</h1>
+    <div className="px-responsive py-responsive space-y-6 min-h-[calc(100vh-3.5rem)]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex-1">
+          <h1 className="text-2xl sm:text-xl md:text-2xl font-semibold text-fg">RFQs</h1>
           <p className="text-sm text-muted mt-0.5">Manage requests for quotations</p>
         </div>
         {canCreate() && (
           <Link
             href="/dashboard/rfqs/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-hover transition-colors whitespace-nowrap"
           >
             + Create RFQ
           </Link>
@@ -56,12 +56,14 @@ export default function RfqsPage() {
           </div>
         </div>
       ) : (
-        <RfqTable
-          rfqs={rfqs}
-          total={total}
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
+        <div className="table-responsive-wrapper">
+          <RfqTable
+            rfqs={rfqs}
+            total={total}
+            filters={filters}
+            onFiltersChange={setFilters}
+          />
+        </div>
       )}
     </div>
   )

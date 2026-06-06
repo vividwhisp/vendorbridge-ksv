@@ -35,14 +35,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="flex min-h-screen items-center justify-center px-4 sm:px-6 py-6 sm:py-8">
+      <div className="w-full max-w-md sm:max-w-sm space-y-6">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2 font-semibold text-fg mb-6">
-            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">D</span>
-            DataHub
+          <Link href="/" className="inline-flex items-center gap-2 font-semibold text-fg mb-6 hover:text-accent transition-colors">
+            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">VB</span>
+            Vendor Bridge
           </Link>
-          <h1 className="text-xl font-semibold text-fg">Sign in</h1>
+          <h1 className="text-2xl sm:text-xl font-semibold text-fg">Sign in</h1>
           <p className="text-sm text-muted mt-1">Enter your credentials to continue</p>
         </div>
 

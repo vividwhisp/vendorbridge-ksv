@@ -4,19 +4,6 @@ import Link from "next/link"
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col relative overflow-hidden">
-      {/* Gradient background with dark theme */}
-      <div className="fixed inset-0 -z-10">
-        {/* Light mode background */}
-        <div className="absolute inset-0 light bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" />
-        {/* Dark mode background */}
-        <div className="absolute inset-0 dark bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900" />
-      </div>
-      
-      {/* Animated background orbs */}
-      <div className="fixed top-20 left-10 w-72 h-72 bg-accent/10 rounded-full blur-3xl bg-animate-orb -z-10" />
-      <div className="fixed top-1/2 right-20 w-96 h-96 bg-accent/5 rounded-full blur-3xl bg-animate-orb-alt -z-10" />
-      <div className="fixed bottom-20 left-1/3 w-80 h-80 bg-accent/5 rounded-full blur-3xl bg-animate-orb -z-10" style={{ animationDelay: "2s" }} />
-      
       <header className="sticky top-0 z-30 border-b border-border bg-bg/80 backdrop-blur animate-slide-in-down">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold text-fg hover:text-accent transition-colors">
@@ -76,14 +63,18 @@ export default function Home() {
             ].map((card, index) => (
               <div
                 key={card.title}
-                className="group rounded-xl border border-border bg-surface/40 backdrop-blur-sm p-6 transition-all duration-300 hover:border-accent/50 hover-card-lift animate-card-entrance"
+                className="group rounded-xl border border-border bg-surface/40 backdrop-blur-sm p-6 card-hover-shadow animate-card-entrance relative overflow-hidden"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <div className="relative">
-                  <h3 className="font-semibold text-fg mb-2 text-lg">{card.title}</h3>
-                  <p className="text-sm text-muted group-hover:text-muted transition-colors duration-300">{card.desc}</p>
-                  {/* Accent line on hover */}
-                  <div className="absolute bottom-0 left-0 h-0.5 w-0 bg-gradient-to-r from-accent to-accent/0 group-hover:w-full transition-all duration-300" />
+                {/* Animated background gradient on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-accent/0 via-accent/0 to-accent/0 group-hover:from-accent/5 group-hover:via-accent/0 group-hover:to-accent/10 transition-all duration-300 pointer-events-none rounded-xl" />
+                
+                <div className="relative z-10">
+                  <h3 className="font-semibold text-fg mb-2 text-lg group-hover:text-accent transition-colors duration-300">{card.title}</h3>
+                  <p className="text-sm text-muted group-hover:text-fg transition-colors duration-300">{card.desc}</p>
+                  
+                  {/* Animated border accent on hover */}
+                  <div className="absolute -bottom-0.5 -left-0.5 h-0.5 bg-gradient-to-r from-accent via-accent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ width: "calc(100% + 4px)" }} />
                 </div>
               </div>
             ))}
