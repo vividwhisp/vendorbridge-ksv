@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link"
 
 export default function Home() {
@@ -6,10 +7,11 @@ export default function Home() {
       <header className="sticky top-0 z-30 border-b border-border bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold text-fg">
-            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">D</span>
-            DataHub
+            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">VB</span>
+            Vendor Bridge
           </Link>
           <nav className="flex items-center gap-4">
+            <ThemeToggle />
             <Link
               href="/dashboard"
               className="inline-flex h-8 items-center rounded-lg bg-accent px-3 text-sm font-medium text-bg hover:bg-accent-hover transition-colors"
@@ -23,16 +25,15 @@ export default function Home() {
       <main className="flex-1">
         <section className="mx-auto max-w-6xl px-4 sm:px-6 pt-24 pb-16 text-center">
           <span className="inline-block rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted mb-6">
-            Next.js 16 + Prisma + PostgreSQL
+            Connecting Vendors, Buyers & ERP Operations in One Smart Platform
           </span>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-fg mb-4">
-            Build data-driven apps
+            Transform Procurement
             <br />
-            <span className="text-accent">in record time</span>
+            <span className="text-accent">With Automation</span>
           </h1>
           <p className="mx-auto max-w-lg text-base text-muted mb-8">
-            A modern full-stack starter with PostgreSQL, Prisma, and a clean interface.
-            Ready to deploy with Docker.
+            Connect vendors, automate approvals, compare quotations, and simplify procurement workflows with Vendor Bridge.
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
@@ -52,13 +53,17 @@ export default function Home() {
 
         <section className="mx-auto max-w-6xl px-4 sm:px-6 pb-24">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { title: "PostgreSQL", desc: "Reliable, ACID-compliant relational database for your data." },
-              { title: "Prisma ORM", desc: "Type-safe auto-generated queries with full IntelliSense." },
-              { title: "Tailwind CSS", desc: "Utility-first styling with a clean, responsive design." },
-              { title: "Theme System", desc: "Light and dark modes with system preference detection." },
-              { title: "Docker Ready", desc: "One command to spin up your entire stack." },
-              { title: "Responsive", desc: "Mobile-first layout that works on every screen size." },
+            {[{ title: "Vendor Onboarding", desc: "Register, verify, and manage vendors through a centralized digital process." },
+
+            { title: "Quotation Management", desc: "Collect, organize, and compare quotations from multiple vendors efficiently." },
+
+            { title: "Approval Workflow", desc: "Automate procurement approvals with configurable multi-level workflows." },
+
+            { title: "Vendor Performance", desc: "Track vendor reliability, delivery history, and overall performance metrics." },
+
+            { title: "Real-Time Notifications", desc: "Keep vendors and procurement teams informed with instant status updates." },
+
+            { title: "Ai Integration", desc: "Seamlessly connect procurement operations with the Ai  ERP ecosystem." }
             ].map((card) => (
               <div
                 key={card.title}
@@ -75,7 +80,7 @@ export default function Home() {
       <footer className="border-t border-border py-6">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-sm text-muted">
-            &copy; {new Date().getFullYear()} DataHub.
+            &copy; {new Date().getFullYear()} Vendor Bridge.
           </p>
           <nav className="flex gap-4 text-sm text-muted">
             <Link href="/dashboard" className="hover:text-fg transition-colors">
