@@ -39,13 +39,19 @@ export default function NewQuotationPage() {
 
   useEffect(() => {
     async function init() {
-      const [sessionRes, rfqsRes] = await Promise.all([
+      const [sessionRes, rfqsRes, vendorRes] = await Promise.all([
         fetch("/api/auth/session"),
         fetch("/api/rfqs?status=PUBLISHED"),
+        fetch("/api/vendor-profile"),
       ])
       const session = await sessionRes.json()
       if (!session?.user?.role || !canSubmitQuotation(session.user.role)) {
         router.push("/dashboard/quotations")
+        return
+      }
+      const vendorData = await vendorRes.json()
+      if (!vendorData?.id) {
+        router.push("/dashboard/vendor-profile")
         return
       }
       const rfqsData = await rfqsRes.json()
