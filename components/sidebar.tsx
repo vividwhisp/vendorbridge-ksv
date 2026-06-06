@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, FileText, ClipboardList, CheckCircle, ShoppingCart, Settings } from "lucide-react"
+import { LayoutDashboard, FileText, ClipboardList, CheckCircle, ShoppingCart, Receipt, Settings } from "lucide-react"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/dashboard/quotations", label: "Quotations", icon: ClipboardList },
   { href: "/dashboard/approvals", label: "Approvals", icon: CheckCircle },
   { href: "/dashboard/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
+  { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
 ]
 
 export function Sidebar() {
