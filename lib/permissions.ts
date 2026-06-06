@@ -53,6 +53,14 @@ export function canSubmitQuotation(role: string | null | undefined): boolean {
   return role === "ADMIN" || role === "VENDOR"
 }
 
+export function canCompareQuotations(role: string | null | undefined): boolean {
+  return role === "ADMIN" || role === "PROCUREMENT_OFFICER" || role === "MANAGER"
+}
+
+export function canShortlistQuotation(role: string | null | undefined): boolean {
+  return role === "ADMIN" || role === "PROCUREMENT_OFFICER"
+}
+
 export function isAdmin(role: string | null | undefined): boolean {
   return role === "ADMIN"
 }
