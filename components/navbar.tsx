@@ -1,15 +1,28 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useSession, signOut } from "next-auth/react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sidebar } from "@/components/sidebar"
+import { RoleBadge } from "@/components/role-badge"
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession()
   const user = session?.user
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-bg/95 backdrop-blur px-4 lg:px-6">
@@ -28,22 +41,50 @@ export function Navbar() {
         </h2>
       </div>
 
-      {user && (
-        <div className="hidden sm:flex items-center gap-2 text-sm text-muted">
-          <span className="text-fg font-medium">{user.name || user.email}</span>
-          <span className="text-xs border border-border rounded-full px-2 py-0.5">{user.role}</span>
-        </div>
-      )}
-
       <ThemeToggle />
 
       {user && (
-        <button
-          onClick={() => signOut({ callbackUrl: "/" })}
-          className="flex h-8 items-center rounded-lg border border-border px-3 text-xs text-muted hover:bg-surface hover:text-fg transition-colors"
-        >
-          Logout
-        </button>
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-fg hover:bg-surface transition-colors"
+          >
+            <span className="flex size-6 items-center justify-center rounded-full bg-accent text-bg text-xs font-medium">
+              {(user.name || user.email || "U")[0].toUpperCase()}
+            </span>
+            <span className="hidden sm:inline max-w-[120px] truncate">
+              {user.name || user.email}
+            </span>
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-border bg-surface shadow-lg py-1 z-30">
+              <div className="px-3 py-2 border-b border-border">
+                <p className="text-sm font-medium text-fg truncate">{user.name}</p>
+                <p className="text-xs text-muted truncate">{user.email}</p>
+              </div>
+              <div className="px-3 py-2 border-b border-border">
+                <RoleBadge role={user.role} />
+              </div>
+              <Link
+                href="/dashboard"
+                onClick={() => setDropdownOpen(false)}
+                className="block px-3 py-2 text-sm text-fg hover:bg-border/30 transition-colors"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={() => {
+                  setDropdownOpen(false)
+                  signOut({ callbackUrl: "/" })
+                }}
+                className="block w-full text-left px-3 py-2 text-sm text-danger hover:bg-border/30 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Mobile sidebar overlay */}
