@@ -6,8 +6,8 @@ export default function Home() {
       <header className="sticky top-0 z-30 border-b border-border bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold text-fg">
-            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">D</span>
-            DataHub
+            <span className="flex size-7 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">V</span>
+            VendorBriddge
           </Link>
           <nav className="flex items-center gap-4">
             <Link
@@ -31,7 +31,7 @@ export default function Home() {
             <span className="text-accent">in record time</span>
           </h1>
           <p className="mx-auto max-w-lg text-base text-muted mb-8">
-            A modern full-stack starter with PostgreSQL, Prisma, and a clean interface.
+            A modern full-stack starter with SQLite, Prisma, and a clean interface.
             Ready to deploy with Docker.
           </p>
           <div className="flex items-center justify-center gap-3">
@@ -53,11 +53,10 @@ export default function Home() {
         <section className="mx-auto max-w-6xl px-4 sm:px-6 pb-24">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { title: "PostgreSQL", desc: "Reliable, ACID-compliant relational database for your data." },
+              { title: "SQLite", desc: "Reliable, ACID-compliant relational database for your data." },
               { title: "Prisma ORM", desc: "Type-safe auto-generated queries with full IntelliSense." },
               { title: "Tailwind CSS", desc: "Utility-first styling with a clean, responsive design." },
               { title: "Theme System", desc: "Light and dark modes with system preference detection." },
-              { title: "Docker Ready", desc: "One command to spin up your entire stack." },
               { title: "Responsive", desc: "Mobile-first layout that works on every screen size." },
             ].map((card) => (
               <div
@@ -75,7 +74,7 @@ export default function Home() {
       <footer className="border-t border-border py-6">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-sm text-muted">
-            &copy; {new Date().getFullYear()} DataHub.
+            &copy; {new Date().getFullYear()} VendorBridge
           </p>
           <nav className="flex gap-4 text-sm text-muted">
             <Link href="/dashboard" className="hover:text-fg transition-colors">

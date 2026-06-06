@@ -23,10 +23,14 @@ COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./
+COPY --from=build /app/next-env.d.ts ./
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./
+
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
+
 CMD ["npm", "run", "start"]

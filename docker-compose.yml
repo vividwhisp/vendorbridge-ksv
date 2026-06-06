@@ -1,22 +1,4 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: datahub-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: datahub
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     container_name: datahub-app
@@ -24,10 +6,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/datahub?schema=public
-    depends_on:
-      db:
-        condition: service_healthy
+      DATABASE_URL: "file:/app/data/dev.db"
+      NEXTAUTH_SECRET: "change-this-to-a-random-secret-in-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+    volumes:
+      - datahub-data:/app/data
 
 volumes:
-  pgdata:
+  datahub-data:
