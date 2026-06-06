@@ -23,7 +23,7 @@ export function Navbar() {
 
       <div className="flex-1">
         <h2 className="text-sm font-semibold text-fg">
-          <Link href="/" className="lg:hidden font-bold">DataHub</Link>
+          <Link href="/" className="lg:hidden font-bold">Vendor Bridge</Link>
           <span className="hidden lg:inline">Dashboard</span>
         </h2>
       </div>

@@ -22,8 +22,8 @@ export function Sidebar() {
     <aside className="flex h-full flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center border-b border-border px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold text-fg">
-          <span className="flex size-6 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">D</span>
-          DataHub
+          <span className="flex size-6 items-center justify-center rounded-md bg-accent text-bg text-xs font-bold">VB</span>
+          Vendor Bridge
         </Link>
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
@@ -46,7 +46,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="p-3 border-t border-border">
-        <p className="px-3 text-xs text-muted">DataHub v1.0</p>
+        <p className="px-3 text-xs text-muted"> Vendor Bridge v1.0</p>
       </div>
     </aside>
   )
