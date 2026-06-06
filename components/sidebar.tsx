@@ -2,17 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { LayoutDashboard, FileText, Settings } from "lucide-react"
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/vendors", label: "Vendors" },
-  { href: "/dashboard/rfqs", label: "RFQs" },
-  { href: "/dashboard/quotations", label: "Quotations" },
-  { href: "/dashboard/approval", label: "Approvals" },
-  { href: "/dashboard/purchase-orders", label: "Purchase Orders" },
-  { href: "/dashboard/invoices", label: "Invoices" },
-  { href: "/dashboard/reports", label: "Reports" },
-  { href: "/dashboard/activities", label: "Activities" }
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/rfqs", label: "RFQs", icon: FileText },
 ]
 
 export function Sidebar() {
@@ -28,7 +22,8 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href
+          const Icon = item.icon
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
             <Link
               key={item.href}
@@ -39,14 +34,20 @@ export function Sidebar() {
                   : "text-muted hover:text-fg hover:bg-border/30"
               }`}
             >
-              <span className="text-xs">{item.label.slice(0, 2).toUpperCase()}</span>
+              <Icon className="size-4" />
               {item.label}
             </Link>
           )
         })}
       </nav>
       <div className="p-3 border-t border-border">
-        <p className="px-3 text-xs text-muted"> Vendor Bridge v1.0</p>
+        <Link
+          href="/dashboard/settings"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:text-fg hover:bg-border/30 transition-colors"
+        >
+          <Settings className="size-4" />
+          Settings
+        </Link>
       </div>
     </aside>
   )
