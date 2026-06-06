@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, FileText, Settings } from "lucide-react"
+import { LayoutDashboard, FileText, ClipboardList, Settings } from "lucide-react"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/rfqs", label: "RFQs", icon: FileText },
+  { href: "/dashboard/quotations", label: "Quotations", icon: ClipboardList },
 ]
 
 export function Sidebar() {

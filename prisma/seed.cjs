@@ -35,7 +35,7 @@ async function main() {
   })
 
   const v1 = await prisma.vendor.create({
-    data: { companyName: "TechSupply Co.", gstNumber: "GST12345678", email: "info@techsupply.com", phone: "+91-9876543210", address: "Mumbai, India", category: "IT", status: "ACTIVE" },
+    data: { companyName: "TechSupply Co.", gstNumber: "GST12345678", email: "info@techsupply.com", phone: "+91-9876543210", address: "Mumbai, India", category: "IT", status: "ACTIVE", userId: vendorUser.id },
   })
   const v2 = await prisma.vendor.create({
     data: { companyName: "BuildMart Ltd.", gstNumber: "GST87654321", email: "sales@buildmart.com", phone: "+91-9876543211", address: "Delhi, India", category: "MATERIALS", status: "ACTIVE" },
